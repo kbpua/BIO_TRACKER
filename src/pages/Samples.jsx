@@ -1,18 +1,18 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { exportSamplesCSV, exportSamplesPDF } from '../utils/export';
 
 export default function Samples() {
-  const { user, canManageSamples, canDeleteSamples, canExportCSV, canExportPDF } = useAuth();
+  const navigate = useNavigate();
+  const { user, canManageSamples, canDeleteSamples, canExportCSV, canExportPDF, isAdmin, isResearcher } = useAuth();
   const { samples, organisms, projects, deleteSample, addActivity } = useData();
   const [search, setSearch] = useState('');
   const [filterOrganism, setFilterOrganism] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [selectedId, setSelectedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   const getOrgName = (id) => organisms.find((o) => o.id === id)?.scientificName ?? '';
@@ -29,7 +29,7 @@ export default function Samples() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return rows.filter((r) => {
-      if (search && ![r.sampleName, r.organismName, r.projectName, r.collectedBy].some((v) => String(v).toLowerCase().includes(q))) return false;
+      if (search && ![r.sampleId, r.sampleName, r.disease, r.organismName, r.projectName, r.tissueSource, r.studyPurpose, r.collectedBy].some((v) => String(v ?? '').toLowerCase().includes(q))) return false;
       if (filterOrganism && r.organismId !== filterOrganism) return false;
       if (filterType && r.sampleType !== filterType) return false;
       if (filterProject && r.projectId !== filterProject) return false;
@@ -46,12 +46,9 @@ export default function Samples() {
     setFilterStatus('');
   };
 
-  const selected = selectedId ? rows.find((r) => r.id === selectedId) : null;
-
   const handleDelete = (id) => {
     deleteSample(id);
     setConfirmDelete(null);
-    setSelectedId(null);
   };
 
   const handleExportCSV = () => {
@@ -65,6 +62,9 @@ export default function Samples() {
 
   const uniqueTypes = useMemo(() => [...new Set(samples.map((s) => s.sampleType))].sort(), [samples]);
   const uniqueStatuses = useMemo(() => [...new Set(samples.map((s) => s.status))].sort(), [samples]);
+
+  const canEditSample = (r) => canManageSamples && (isAdmin || (isResearcher && r.collectedBy === user?.fullName));
+  const canDeleteSample = (r) => canDeleteSamples && (isAdmin || (isResearcher && r.collectedBy === user?.fullName));
 
   return (
     <div className="space-y-4">
@@ -104,7 +104,7 @@ export default function Samples() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <input
             type="text"
-            placeholder="Search (name, organism, project, collected by)"
+            placeholder="Search (Sample ID, disease, organism, project, tissue source, study purpose)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-mint-500 focus:border-mint-500 lg:col-span-2"
@@ -165,14 +165,12 @@ export default function Samples() {
             <thead className="bg-mint-50 border-b border-mint-100">
               <tr>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Sample ID</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Disease</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Organism</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Project</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Collection Date</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Collected By</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Storage</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Sample Type</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Tissue Source</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Study Purpose</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Project name</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
@@ -180,37 +178,25 @@ export default function Samples() {
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}
+                  onClick={() => navigate(`/samples/${r.id}`)}
                   className="border-b border-mint-50 hover:bg-mint-50/50 cursor-pointer"
                 >
                   <td className="py-2 px-4">{r.sampleId}</td>
-                  <td className="py-2 px-4">{r.sampleName}</td>
-                  <td className="py-2 px-4">{r.sampleType}</td>
+                  <td className="py-2 px-4">{r.disease ?? '—'}</td>
                   <td className="py-2 px-4">{r.organismName}</td>
+                  <td className="py-2 px-4">{r.sampleType}</td>
+                  <td className="py-2 px-4">{r.tissueSource ?? '—'}</td>
+                  <td className="py-2 px-4">{r.studyPurpose ?? '—'}</td>
                   <td className="py-2 px-4">{r.projectName}</td>
-                  <td className="py-2 px-4">{r.collectionDate}</td>
-                  <td className="py-2 px-4">{r.collectedBy}</td>
-                  <td className="py-2 px-4">{r.storageLocation}</td>
-                  <td className="py-2 px-4">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      r.status === 'Active' ? 'bg-green-100 text-green-800' :
-                      r.status === 'Used' ? 'bg-blue-100 text-blue-800' :
-                      r.status === 'Expired' ? 'bg-amber-100 text-amber-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {r.status}
-                    </span>
-                  </td>
                   <td className="py-2 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}
+                        <Link
+                          to={`/samples/${r.id}`}
                           className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                         >
                           View
-                        </button>
-                        {canManageSamples && (
+                        </Link>
+                        {canEditSample(r) && (
                           <Link
                             to={`/samples/${r.id}/edit`}
                             className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
@@ -218,10 +204,10 @@ export default function Samples() {
                             Edit
                           </Link>
                         )}
-                        {canDeleteSamples && (
+                        {canDeleteSample(r) && (
                           <button
                             type="button"
-                            onClick={() => setConfirmDelete(r.id)}
+                            onClick={(e) => { e.stopPropagation(); setConfirmDelete(r.id); }}
                             className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
                           >
                             Delete
@@ -238,45 +224,6 @@ export default function Samples() {
           <p className="py-8 text-center text-gray-500">No samples match your filters.</p>
         )}
       </div>
-
-      {selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedId(null)}>
-          <div className="bg-white rounded-xl border border-mint-100 shadow-xl p-6 max-w-lg w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">Sample Details</h2>
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              <div><dt className="text-gray-500">Sample ID</dt><dd className="font-medium">{selected.sampleId}</dd></div>
-              <div><dt className="text-gray-500">Sample Name</dt><dd className="font-medium">{selected.sampleName}</dd></div>
-              <div><dt className="text-gray-500">Sample Type</dt><dd>{selected.sampleType}</dd></div>
-              <div><dt className="text-gray-500">Organism</dt><dd>{selected.organismName}</dd></div>
-              <div><dt className="text-gray-500">Project</dt><dd>{selected.projectName}</dd></div>
-              <div><dt className="text-gray-500">Collection Date</dt><dd>{selected.collectionDate}</dd></div>
-              <div><dt className="text-gray-500">Collected By</dt><dd>{selected.collectedBy}</dd></div>
-              <div><dt className="text-gray-500">Storage Location</dt><dd>{selected.storageLocation}</dd></div>
-              <div><dt className="text-gray-500">Status</dt><dd>{selected.status}</dd></div>
-              <div className="sm:col-span-2"><dt className="text-gray-500">Notes</dt><dd>{selected.notes || '—'}</dd></div>
-            </dl>
-            {canManageSamples && (
-              <div className="mt-4">
-                <Link
-                  to={`/samples/${selected.id}/edit`}
-                  className="text-mint-600 hover:text-mint-800 font-medium"
-                >
-                  Edit sample →
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

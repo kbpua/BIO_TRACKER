@@ -6,6 +6,8 @@ import {
   MOCK_ACTIVITY_INITIAL,
   MOCK_USERS,
 } from '../data/mockData';
+import { setUserPassword } from '../store/authStore';
+import { generateUserId } from '../utils/userId';
 
 const DataContext = createContext(null);
 
@@ -68,9 +70,15 @@ export function DataProvider({ children }) {
   }, []);
 
   const updateOrganism = useCallback((id, updates) => {
+    const newId = updates.id !== undefined ? updates.id : id;
     setOrganisms((prev) =>
       prev.map((o) => (o.id === id ? { ...o, ...updates } : o))
     );
+    if (newId !== id) {
+      setSamples((prev) =>
+        prev.map((s) => (s.organismId === id ? { ...s, organismId: newId } : s))
+      );
+    }
   }, []);
 
   const deleteOrganism = useCallback((id) => {
@@ -84,16 +92,28 @@ export function DataProvider({ children }) {
   }, []);
 
   const addUser = useCallback((userData) => {
-    const { password: _, ...rest } = userData;
-    const newUser = {
+    const { password, ...rest } = userData;
+    setUsers((prev) => {
+      const id = generateUserId(userData.role, userData.fullName, prev.length);
+      const newUser = {
+        ...rest,
+        id,
+        dateCreated: new Date().toISOString().split('T')[0],
+        createdBy: userData.createdBy || 'Admin',
+        pendingDaysRemaining: userData.pendingDaysRemaining,
+      };
+      if (password) setUserPassword(userData.email, password);
+      return [...prev, newUser];
+    });
+    const id = generateUserId(userData.role, userData.fullName, users.length);
+    return {
       ...rest,
-      id: userData.id || generateId('u'),
+      id,
       dateCreated: new Date().toISOString().split('T')[0],
       createdBy: userData.createdBy || 'Admin',
+      pendingDaysRemaining: userData.pendingDaysRemaining,
     };
-    setUsers((prev) => [...prev, newUser]);
-    return newUser;
-  }, []);
+  }, [users.length]);
 
   const deleteUser = useCallback((id) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));

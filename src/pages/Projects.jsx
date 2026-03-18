@@ -1,9 +1,16 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { PROJECT_STATUSES } from '../data/mockData';
+import { generateProjectId } from '../utils/projectId';
 
 function ProjectForm({ project, onSave, onCancel }) {
+  const { users, projects } = useData();
+  const activeResearchers = (users || []).filter(
+    (u) => u.role === 'Researcher' && u.status === 'Active'
+  );
+  const isEdit = Boolean(project?.id);
   const [form, setForm] = useState({
     name: project?.name ?? '',
     description: project?.description ?? '',
@@ -12,6 +19,9 @@ function ProjectForm({ project, onSave, onCancel }) {
     leadResearcher: project?.leadResearcher ?? '',
     status: project?.status ?? 'Active',
   });
+  const previewId = !isEdit && form.name && form.startDate
+    ? generateProjectId(form.name, form.startDate, projects.length)
+    : '';
 
   return (
     <form
@@ -21,6 +31,26 @@ function ProjectForm({ project, onSave, onCancel }) {
       }}
       className="space-y-3"
     >
+      {isEdit ? (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Project ID</label>
+          <input
+            type="text"
+            value={project?.id ?? ''}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed text-sm"
+          />
+          <p className="text-xs text-gray-500 mt-1">Project ID cannot be edited.</p>
+        </div>
+      ) : (
+        form.name && form.startDate && (
+          <div className="p-3 rounded-lg bg-mint-50 border border-mint-200">
+            <label className="block text-sm font-medium text-mint-800 mb-1">Generated Project ID (preview)</label>
+            <p className="font-mono font-semibold text-mint-800">{previewId}</p>
+            <p className="text-xs text-gray-500 mt-1">This ID will be assigned when you submit.</p>
+          </div>
+        )
+      )}
       <input
         type="text"
         placeholder="Project Name"
@@ -52,13 +82,23 @@ function ProjectForm({ project, onSave, onCancel }) {
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
         />
       </div>
-      <input
-        type="text"
-        placeholder="Lead Researcher"
+      <select
         value={form.leadResearcher}
         onChange={(e) => setForm((f) => ({ ...f, leadResearcher: e.target.value }))}
         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-      />
+        required={activeResearchers.length > 0}
+      >
+        {activeResearchers.length === 0 ? (
+          <option value="" disabled>No active researchers available.</option>
+        ) : (
+          <>
+            <option value="">Select lead researcher</option>
+            {activeResearchers.map((r) => (
+              <option key={r.id} value={r.fullName}>{r.fullName}</option>
+            ))}
+          </>
+        )}
+      </select>
       <select
         value={form.status}
         onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
@@ -81,20 +121,38 @@ function ProjectForm({ project, onSave, onCancel }) {
 }
 
 export default function Projects() {
-  const { canManageProjects } = useAuth();
+  const { user, canManageProjects, isResearcher } = useAuth();
   const { projects, samples, addProject, updateProject, deleteProject } = useData();
+
+  const canEditProject = (p) =>
+    canManageProjects || (isResearcher && p.leadResearcher === user?.fullName);
   const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [viewProjectId, setViewProjectId] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const countByProject = samples.reduce((acc, s) => {
     acc[s.projectId] = (acc[s.projectId] || 0) + 1;
     return acc;
   }, {});
 
+  const filteredProjects = projects.filter((p) => {
+    const q = search.toLowerCase();
+    const matchSearch = !search || [p.name, p.description, p.leadResearcher].some((v) => String(v ?? '').toLowerCase().includes(q));
+    const matchStatus = !filterStatus || p.status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  const clearFilters = () => {
+    setSearch('');
+    setFilterStatus('');
+  };
+
   const handleSave = (data) => {
-    if (modal === 'new') addProject(data);
-    else if (modal?.id) updateProject(modal.id, data);
+    if (modal === 'new') {
+      const id = generateProjectId(data.name, data.startDate, projects.length);
+      addProject({ ...data, id });
+    } else if (modal?.id) updateProject(modal.id, data);
     setModal(null);
   };
 
@@ -117,6 +175,30 @@ export default function Projects() {
           </button>
         )}
       </div>
+      <div className="bg-white rounded-xl border border-mint-100 p-4 shadow-sm space-y-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          <input
+            type="text"
+            placeholder="Search by name, description, or lead researcher"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-mint-500 focus:border-mint-500 flex-1 min-w-[200px]"
+          />
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-mint-500"
+          >
+            <option value="">All Statuses</option>
+            {PROJECT_STATUSES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <button type="button" onClick={clearFilters} className="text-sm text-mint-600 hover:text-mint-800 font-medium">
+            Clear Filters
+          </button>
+        </div>
+      </div>
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-mint-50 border-b border-mint-100">
@@ -133,7 +215,7 @@ export default function Projects() {
             </tr>
           </thead>
           <tbody>
-            {projects.map((p) => (
+            {filteredProjects.map((p) => (
               <tr key={p.id} className="border-b border-mint-50 hover:bg-mint-50/50">
                 <td className="py-2 px-4">{p.id}</td>
                 <td className="py-2 px-4 font-medium">{p.name}</td>
@@ -152,14 +234,13 @@ export default function Projects() {
                 <td className="py-2 px-4">{countByProject[p.id] ?? 0}</td>
                 <td className="py-2 px-4">
                   <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setViewProjectId(viewProjectId === p.id ? null : p.id)}
+                    <Link
+                      to={`/projects/${p.id}`}
                       className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                     >
                       View
-                    </button>
-                    {canManageProjects && (
+                    </Link>
+                    {canEditProject(p) && (
                       <>
                         <button
                           type="button"
@@ -183,49 +264,10 @@ export default function Projects() {
             ))}
           </tbody>
         </table>
+        {filteredProjects.length === 0 && (
+          <p className="py-8 text-center text-gray-500">No projects match your filters.</p>
+        )}
       </div>
-
-      {viewProjectId && (() => {
-        const p = projects.find((proj) => proj.id === viewProjectId);
-        if (!p) return null;
-        return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setViewProjectId(null)}>
-            <div className="bg-white rounded-xl border border-mint-100 shadow-xl p-6 max-w-lg w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-start mb-4">
-                <h2 className="text-lg font-semibold text-gray-800">Project Details</h2>
-                <button
-                  type="button"
-                  onClick={() => setViewProjectId(null)}
-                  className="px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-              </div>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div><dt className="text-gray-500">Project ID</dt><dd className="font-medium">{p.id}</dd></div>
-                <div><dt className="text-gray-500">Project Name</dt><dd className="font-medium">{p.name}</dd></div>
-                <div className="sm:col-span-2"><dt className="text-gray-500">Description</dt><dd>{p.description || '—'}</dd></div>
-                <div><dt className="text-gray-500">Start Date</dt><dd>{p.startDate || '—'}</dd></div>
-                <div><dt className="text-gray-500">End Date</dt><dd>{p.endDate || '—'}</dd></div>
-                <div><dt className="text-gray-500">Lead Researcher</dt><dd>{p.leadResearcher || '—'}</dd></div>
-                <div><dt className="text-gray-500">Status</dt><dd>{p.status}</dd></div>
-                <div><dt className="text-gray-500"># Associated Samples</dt><dd>{countByProject[p.id] ?? 0}</dd></div>
-              </dl>
-              {canManageProjects && (
-                <div className="mt-4">
-                  <button
-                    type="button"
-                    onClick={() => { setViewProjectId(null); setModal({ id: p.id, project: p }); }}
-                    className="text-mint-600 hover:text-mint-800 font-medium text-sm"
-                  >
-                    Edit project →
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
 
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

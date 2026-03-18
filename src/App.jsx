@@ -5,10 +5,14 @@ import { Layout } from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Samples from './pages/Samples';
+import SampleDetail from './pages/SampleDetail';
 import SampleForm from './pages/SampleForm';
 import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Organisms from './pages/Organisms';
+import OrganismDetail from './pages/OrganismDetail';
 import UserManagement from './pages/UserManagement';
+import CreateUser from './pages/CreateUser';
 import ExportData from './pages/ExportData';
 
 function App() {
@@ -30,8 +34,11 @@ function App() {
         <Route path="samples" element={<Samples />} />
         <Route path="samples/new" element={<SampleForm />} />
         <Route path="samples/:id/edit" element={<SampleForm />} />
+        <Route path="samples/:id" element={<SampleDetail />} />
         <Route path="projects" element={<Projects />} />
+        <Route path="projects/:id" element={<ProjectDetail />} />
         <Route path="organisms" element={<Organisms />} />
+        <Route path="organisms/:id" element={<OrganismDetail />} />
         <Route
           path="users"
           element={
@@ -40,6 +47,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="create-user" element={<ProtectedRoute adminOnly><CreateUser /></ProtectedRoute>} />
         <Route path="export" element={<ExportData />} />
       </Route>
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />

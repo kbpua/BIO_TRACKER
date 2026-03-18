@@ -15,6 +15,7 @@ export function Layout({ children }) {
     navItem('/projects', 'Projects', '📁'),
     navItem('/organisms', 'Organisms', '🦠'),
     ...(isAdmin ? [navItem('/users', 'User Management', '👥')] : []),
+    ...(isAdmin ? [navItem('/create-user', 'Create User', '➕')] : []),
     ...(canExportData ? [navItem('/export', 'Export Data', '📤')] : []),
   ];
 

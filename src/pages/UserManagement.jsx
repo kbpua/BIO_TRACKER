@@ -69,17 +69,21 @@ export default function UserManagement() {
       </div>
 
       {pending.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <h2 className="font-semibold text-amber-900 mb-3">Pending Approvals</h2>
-          <ul className="space-y-2">
+        <div className="bg-amber-50/90 border border-amber-300 rounded-xl p-5 shadow-sm">
+          <h2 className="font-bold text-amber-900 text-lg mb-4">Pending Approvals</h2>
+          <ul className="space-y-0 divide-y divide-amber-200/80">
             {pending.map((u) => (
-              <li key={u.id} className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-gray-800">{u.fullName} ({u.email})</span>
-                <span className="text-amber-700 text-sm font-medium">{pendingDeadline(u)}</span>
+              <li key={u.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <span className="text-blue-900 font-medium flex-1 min-w-0 truncate">
+                  {u.fullName} ({u.email})
+                </span>
+                <span className="text-amber-600 text-sm font-medium shrink-0">
+                  {pendingDeadline(u)}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleApprove(u.id)}
-                  className="px-3 py-1 bg-mint-600 text-white text-sm rounded-lg hover:bg-mint-700"
+                  className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700 shadow-sm shrink-0"
                 >
                   Approve
                 </button>
