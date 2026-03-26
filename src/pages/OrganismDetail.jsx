@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
+import { useAuth } from '../contexts/AuthContext';
 import { PROJECT_STATUSES } from '../data/mockData';
+import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 
 export default function OrganismDetail() {
   const { id } = useParams();
   const { projects, samples, organisms } = useData();
+  const { user } = useAuth();
   const [projSearch, setProjSearch] = useState('');
   const [projStatus, setProjStatus] = useState('');
   const [sampleSearch, setSampleSearch] = useState('');
@@ -15,20 +18,23 @@ export default function OrganismDetail() {
   const organism = organisms.find((o) => o.id === id);
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
 
+  const visibleProjects = useMemo(() => getVisibleProjects(projects, user), [projects, user]);
+  const visibleSamples = useMemo(() => getVisibleSamples(samples, projects, user), [samples, projects, user]);
+
   const relatedSamples = useMemo(() => {
     if (!organism) return [];
-    return samples.filter((s) => s.organismId === organism.id);
-  }, [organism, samples]);
+    return visibleSamples.filter((s) => s.organismId === organism.id);
+  }, [organism, visibleSamples]);
 
   const relatedProjectIds = useMemo(() => [...new Set(relatedSamples.map((s) => s.projectId))], [relatedSamples]);
   const relatedProjects = useMemo(() => {
-    return projects
+    return visibleProjects
       .filter((p) => relatedProjectIds.includes(p.id))
       .map((p) => ({
         ...p,
         sampleCount: relatedSamples.filter((s) => s.projectId === p.id).length,
       }));
-  }, [projects, relatedProjectIds, relatedSamples]);
+  }, [visibleProjects, relatedProjectIds, relatedSamples]);
 
   const samplesWithNames = useMemo(() => {
     return relatedSamples.map((s) => ({

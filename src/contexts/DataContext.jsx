@@ -5,9 +5,12 @@ import {
   MOCK_SAMPLES_INITIAL,
   MOCK_ACTIVITY_INITIAL,
   MOCK_USERS,
+  MOCK_PENDING_REQUESTS_INITIAL,
+  MOCK_CO_RESEARCHER_INVITES_INITIAL,
 } from '../data/mockData';
 import { setUserPassword } from '../store/authStore';
 import { generateUserId } from '../utils/userId';
+import { getProjectPublicationStatus } from '../utils/visibility';
 
 const DataContext = createContext(null);
 
@@ -15,12 +18,27 @@ function generateId(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function isoFromHoursAgo(hoursAgo = 0) {
+  const d = new Date();
+  d.setHours(d.getHours() - Number(hoursAgo || 0));
+  return d.toISOString();
+}
+
 export function DataProvider({ children }) {
   const [samples, setSamples] = useState(MOCK_SAMPLES_INITIAL);
   const [organisms, setOrganisms] = useState(MOCK_ORGANISMS);
-  const [projects, setProjects] = useState(MOCK_PROJECTS);
+  const [projects, setProjects] = useState(() =>
+    (MOCK_PROJECTS || []).map((p) => ({ ...p, publicationStatus: getProjectPublicationStatus(p) }))
+  );
   const [users, setUsers] = useState(MOCK_USERS.map((u) => ({ ...u, password: undefined })));
   const [activity, setActivity] = useState(MOCK_ACTIVITY_INITIAL);
+  const [pendingRequests, setPendingRequests] = useState(MOCK_PENDING_REQUESTS_INITIAL);
+  const [coResearcherInvites, setCoResearcherInvites] = useState(() =>
+    (MOCK_CO_RESEARCHER_INVITES_INITIAL || []).map((inv) => ({
+      ...inv,
+      createdAt: inv.createdAt || isoFromHoursAgo(inv.hoursAgo),
+    }))
+  );
 
   const addSample = useCallback((sample) => {
     const newSample = {
@@ -42,20 +60,179 @@ export function DataProvider({ children }) {
     setSamples((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
+  const submitAddRequest = useCallback(({
+    projectId,
+    requestedBy,
+    proposedSample,
+    sampleId,
+  }) => {
+    const req = {
+      id: generateId('pr'),
+      projectId,
+      type: 'add',
+      requestedBy,
+      sampleRecordId: null,
+      sampleId,
+      submittedAt: new Date().toISOString(),
+      proposedSample,
+    };
+    setPendingRequests((prev) => [req, ...prev]);
+    return req;
+  }, []);
+
+  const submitEditRequest = useCallback(({
+    projectId,
+    requestedBy,
+    sampleRecordId,
+    sampleId,
+    proposedUpdates,
+    changes,
+  }) => {
+    const req = {
+      id: generateId('pr'),
+      projectId,
+      type: 'edit',
+      requestedBy,
+      sampleRecordId,
+      sampleId,
+      submittedAt: new Date().toISOString(),
+      proposedUpdates,
+      changes,
+    };
+    setPendingRequests((prev) => [req, ...prev]);
+    return req;
+  }, []);
+
+  const submitDeleteRequest = useCallback(({
+    projectId,
+    requestedBy,
+    sampleRecordId,
+    sampleId,
+    reason,
+  }) => {
+    const req = {
+      id: generateId('pr'),
+      projectId,
+      type: 'delete',
+      requestedBy,
+      sampleRecordId,
+      sampleId,
+      submittedAt: new Date().toISOString(),
+      reason,
+    };
+    setPendingRequests((prev) => [req, ...prev]);
+    return req;
+  }, []);
+
+  const approvePendingRequest = useCallback((requestId) => {
+    let approved = null;
+    setPendingRequests((prev) => {
+      const found = prev.find((r) => r.id === requestId);
+      approved = found || null;
+      return prev.filter((r) => r.id !== requestId);
+    });
+    if (!approved) return null;
+
+    if (approved.type === 'add') {
+      addSample(approved.proposedSample);
+    } else if (approved.type === 'edit') {
+      setSamples((prev) =>
+        prev.map((s) => (s.id === approved.sampleRecordId ? { ...s, ...approved.proposedUpdates } : s))
+      );
+    } else if (approved.type === 'delete') {
+      setSamples((prev) => prev.filter((s) => s.id !== approved.sampleRecordId));
+    }
+
+    return approved;
+  }, [addSample]);
+
+  const rejectPendingRequest = useCallback((requestId) => {
+    let rejected = null;
+    setPendingRequests((prev) => {
+      const found = prev.find((r) => r.id === requestId);
+      rejected = found || null;
+      return prev.filter((r) => r.id !== requestId);
+    });
+    return rejected;
+  }, []);
+
+  const sendCoResearcherInvites = useCallback(({
+    projectId,
+    invitedBy,
+    invitedToList,
+  }) => {
+    const now = new Date().toISOString();
+    const created = [];
+    setCoResearcherInvites((prev) => {
+      const existingKeys = new Set(
+        prev
+          .filter((i) => i.projectId === projectId && i.status === 'Pending')
+          .map((i) => `${i.projectId}::${i.invitedTo}`)
+      );
+      const next = [...prev];
+      (invitedToList || []).forEach((invitedTo) => {
+        const key = `${projectId}::${invitedTo}`;
+        if (!invitedTo || existingKeys.has(key)) return;
+        const invite = {
+          id: generateId('inv'),
+          projectId,
+          invitedBy,
+          invitedTo,
+          status: 'Pending', // Pending | Accepted | Declined
+          createdAt: now,
+        };
+        existingKeys.add(key);
+        created.push(invite);
+        next.unshift(invite);
+      });
+      return next;
+    });
+    return created;
+  }, []);
+
+  const respondToCoResearcherInvite = useCallback((inviteId, decision) => {
+    let invite = null;
+    setCoResearcherInvites((prev) => {
+      const found = prev.find((i) => i.id === inviteId);
+      if (!found) return prev;
+      invite = found;
+      // remove from list after response (prototype)
+      return prev.filter((i) => i.id !== inviteId);
+    });
+    if (!invite) return null;
+
+    if (decision === 'Accepted') {
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== invite.projectId) return p;
+          const current = Array.isArray(p.coResearchers) ? p.coResearchers : [];
+          if (current.includes(invite.invitedTo)) return p;
+          return { ...p, coResearchers: [...current, invite.invitedTo] };
+        })
+      );
+    }
+
+    return { ...invite, status: decision };
+  }, []);
+
   const addActivity = useCallback((text) => {
     const timeAgo = 'Just now';
     setActivity((prev) => [{ id: generateId('a'), text, timeAgo }, ...prev.slice(0, 19)]);
   }, []);
 
   const addProject = useCallback((project) => {
-    const newProject = { ...project, id: project.id || generateId('proj') };
+    const newProject = {
+      ...project,
+      id: project.id || generateId('proj'),
+      publicationStatus: getProjectPublicationStatus(project),
+    };
     setProjects((prev) => [...prev, newProject]);
     return newProject;
   }, []);
 
   const updateProject = useCallback((id, updates) => {
     setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      prev.map((p) => (p.id === id ? { ...p, ...updates, publicationStatus: getProjectPublicationStatus({ ...p, ...updates }) } : p))
     );
   }, []);
 
@@ -128,9 +305,18 @@ export function DataProvider({ children }) {
     projects,
     users,
     activity,
+    pendingRequests,
+    coResearcherInvites,
     addSample,
     updateSample,
     deleteSample,
+    submitAddRequest,
+    submitEditRequest,
+    submitDeleteRequest,
+    approvePendingRequest,
+    rejectPendingRequest,
+    sendCoResearcherInvites,
+    respondToCoResearcherInvite,
     addActivity,
     addProject,
     updateProject,

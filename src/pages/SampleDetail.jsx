@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { canUserViewProject } from '../utils/visibility';
 import {
   ORGANISM_CONTENT,
   SAMPLE_TYPE_CONTENT,
@@ -25,13 +26,14 @@ function EduCard({ title, icon, children, headerClass }) {
 
 export default function SampleDetail() {
   const { id } = useParams();
-  const { canManageSamples } = useAuth();
+  const { canManageSamples, user } = useAuth();
   const { samples, organisms, projects } = useData();
 
   const getOrgName = (oid) => organisms.find((o) => o.id === oid)?.scientificName ?? '';
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
 
   const sample = samples.find((s) => s.id === id);
+  const proj = sample ? projects.find((p) => p.id === sample.projectId) : null;
   const organism = sample ? organisms.find((o) => o.id === sample.organismId) : null;
   const row = sample
     ? {
@@ -54,6 +56,16 @@ export default function SampleDetail() {
         <Link to="/samples" className="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
           Back to Samples
         </Link>
+      </div>
+    );
+  }
+
+  if (proj && !canUserViewProject(user, proj)) {
+    return (
+      <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
+        <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
+        <p className="text-gray-600">This sample belongs to a project that has not been published yet.</p>
+        <Link to="/samples" className="text-mint-600 font-medium hover:underline">Back to Samples</Link>
       </div>
     );
   }

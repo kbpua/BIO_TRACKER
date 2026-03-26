@@ -1,31 +1,62 @@
-import { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { canUserChangeProjectPublication, canUserViewProject, getProjectPublicationStatus } from '../utils/visibility';
 
 export default function ProjectDetail() {
   const { id } = useParams();
   const { user, isAdmin, isResearcher } = useAuth();
-  const { projects, samples, organisms, deleteSample, addActivity } = useData();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const {
+    projects,
+    samples,
+    organisms,
+    deleteSample,
+    addActivity,
+    updateProject,
+    pendingRequests,
+    approvePendingRequest,
+    rejectPendingRequest,
+    submitDeleteRequest,
+  } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmPublication, setConfirmPublication] = useState(null);
+  const [confirmRequestDelete, setConfirmRequestDelete] = useState(null);
 
   const project = projects.find((p) => p.id === id);
   const getOrgName = (oid) => organisms.find((o) => o.id === oid)?.scientificName ?? '';
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
 
   const isLeadResearcher = isResearcher && project?.leadResearcher === user?.fullName;
-  const canAddSample = isAdmin || isLeadResearcher;
-  const canEditSample = (r) => isAdmin || (isResearcher && r.collectedBy === user?.fullName);
-  const canDeleteSample = (r) => isAdmin || (isResearcher && r.collectedBy === user?.fullName);
+  const isCoResearcher = isResearcher && Array.isArray(project?.coResearchers) && project.coResearchers.includes(user?.fullName);
+  const canAddSample = isAdmin || isLeadResearcher || isCoResearcher;
+
+  const canEditSampleDirect = () => isAdmin || isLeadResearcher;
+  const canDeleteSampleDirect = () => isAdmin || isLeadResearcher;
+  const canRequestEdit = (r) => !isAdmin && isCoResearcher && r.collectedBy === user?.fullName;
+  const canRequestDelete = (r) => !isAdmin && isCoResearcher && r.collectedBy === user?.fullName;
+
+  useEffect(() => {
+    // Clear any legacy location.state flash payloads without showing them here.
+    const stateMsg = location.state?.flash;
+    if (stateMsg) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const relatedSamples = useMemo(() => {
     if (!project) return [];
+    // Newest-first: later in array = more recent.
     return samples
-      .filter((s) => s.projectId === project.id)
-      .map((s) => ({
+      .map((s, idx) => ({ s, idx }))
+      .filter(({ s }) => s.projectId === project.id)
+      .sort((a, b) => b.idx - a.idx)
+      .map(({ s }) => ({
         ...s,
         organismName: getOrgName(s.organismId),
         projectName: getProjName(s.projectId),
@@ -57,6 +88,87 @@ export default function ProjectDetail() {
     addActivity(`${user?.fullName} deleted a sample from project ${project?.name}`);
   };
 
+  const canSeePendingQueue = isAdmin || isLeadResearcher;
+  const pendingForProject = useMemo(() => {
+    if (!project) return [];
+    return (pendingRequests || []).filter((r) => r.projectId === project.id);
+  }, [pendingRequests, project]);
+
+  const enqueueToastForUser = (fullName, payload) => {
+    if (!fullName) return;
+    const key = `biosample_toast_queue:${fullName}`;
+    try {
+      const raw = sessionStorage.getItem(key);
+      const prev = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(prev) ? prev : [];
+      sessionStorage.setItem(key, JSON.stringify([...arr, payload]));
+    } catch {}
+  };
+
+  const formatChangesSummary = (changes) => {
+    if (!Array.isArray(changes) || changes.length === 0) return '';
+    return changes
+      .slice(0, 3)
+      .map((c) => `${c.field}: ${String(c.from)} → ${String(c.to)}`)
+      .join('; ') + (changes.length > 3 ? ` (+${changes.length - 3} more)` : '');
+  };
+
+  const approve = (reqId) => {
+    const approved = approvePendingRequest(reqId);
+    if (!approved) return;
+    if (approved.type === 'edit') {
+      const summary = formatChangesSummary(approved.changes);
+      const msg = summary
+        ? `Edit request approved for ${approved.sampleId}. ${summary}`
+        : `Edit request approved. Sample ${approved.sampleId} has been updated.`;
+      // Show immediately for approver (admin/lead)
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+      // Also queue for the requester to see later when they come back.
+      enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+    } else if (approved.type === 'delete') {
+      const reason = approved.reason ? ` Reason: ${approved.reason}` : '';
+      const msg = `Delete request approved. Sample ${approved.sampleId} has been removed.${reason}`;
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+      enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+    } else {
+      const type = approved.proposedSample?.sampleType ? ` (${approved.proposedSample.sampleType})` : '';
+      const msg = `Add request approved. Sample ${approved.sampleId}${type} has been added.`;
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+      enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+    }
+  };
+
+  const reject = (reqId) => {
+    const rejected = rejectPendingRequest(reqId);
+    if (!rejected) return;
+    const kind = rejected.type === 'edit' ? 'Edit' : rejected.type === 'delete' ? 'Delete' : 'Add';
+    const extra = rejected.type === 'edit'
+      ? formatChangesSummary(rejected.changes)
+      : rejected.type === 'delete' && rejected.reason
+        ? `Reason: ${rejected.reason}`
+        : '';
+    const msg = extra
+      ? `${kind} request rejected for ${rejected.sampleId}. ${extra}`
+      : `${kind} request rejected for ${rejected.sampleId}. No changes have been made.`;
+    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
+    enqueueToastForUser(rejected.requestedBy, { message: msg, variant: 'error' });
+  };
+
+  const handleRequestDelete = (sampleRow) => {
+    if (!project) return;
+    submitDeleteRequest({
+      projectId: project.id,
+      requestedBy: user?.fullName || 'Unknown',
+      sampleRecordId: sampleRow.id,
+      sampleId: sampleRow.sampleId,
+      reason: sampleRow.status === 'Contaminated' ? 'Sample is contaminated' : '',
+    });
+    setConfirmRequestDelete(null);
+    const msg = `Your delete request for ${sampleRow.sampleId} has been submitted for approval by the Lead Researcher.`;
+    // This is a co-researcher action; show immediately to the current user only.
+    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+  };
+
   if (!project) {
     return (
       <div className="space-y-4">
@@ -65,6 +177,19 @@ export default function ProjectDetail() {
       </div>
     );
   }
+
+  if (!canUserViewProject(user, project)) {
+    return (
+      <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
+        <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
+        <p className="text-gray-600">This project has not been published yet.</p>
+        <Link to="/projects" className="text-mint-600 font-medium hover:underline">Back to Projects</Link>
+      </div>
+    );
+  }
+
+  const pubStatus = getProjectPublicationStatus(project);
+  const canChangePublication = canUserChangeProjectPublication(user, project);
 
   return (
     <div className="space-y-6">
@@ -75,7 +200,30 @@ export default function ProjectDetail() {
       </div>
 
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-6">
-        <h1 className="text-xl font-bold text-gray-800 mb-4">Project Details</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <h1 className="text-xl font-bold text-gray-800">Project Details</h1>
+          {canChangePublication && (
+            <div className="flex flex-wrap gap-2">
+              {pubStatus === 'Draft' ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmPublication('publish')}
+                  className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+                >
+                  Publish Project
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmPublication('unpublish')}
+                  className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700"
+                >
+                  Unpublish Project
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div><dt className="text-gray-500">Project ID</dt><dd className="font-medium">{project.id}</dd></div>
           <div><dt className="text-gray-500">Project Name</dt><dd className="font-medium">{project.name}</dd></div>
@@ -83,9 +231,87 @@ export default function ProjectDetail() {
           <div><dt className="text-gray-500">Start Date</dt><dd>{project.startDate || '—'}</dd></div>
           <div><dt className="text-gray-500">End Date</dt><dd>{project.endDate || '—'}</dd></div>
           <div><dt className="text-gray-500">Lead Researcher</dt><dd>{project.leadResearcher || '—'}</dd></div>
+          <div className="sm:col-span-2">
+            <dt className="text-gray-500">Co-Researchers</dt>
+            <dd>{(Array.isArray(project.coResearchers) && project.coResearchers.length > 0) ? project.coResearchers.join(', ') : '—'}</dd>
+          </div>
           <div><dt className="text-gray-500">Status</dt><dd>{project.status}</dd></div>
+          <div><dt className="text-gray-500">Publication Status</dt><dd>{pubStatus}</dd></div>
         </dl>
       </div>
+
+      {canSeePendingQueue && (
+        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-gray-800">Pending Requests</h2>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+              {pendingForProject.length} pending requests
+            </span>
+          </div>
+          {pendingForProject.length === 0 ? (
+            <p className="text-sm text-gray-500">No pending requests.</p>
+          ) : (
+            <div className="space-y-2">
+              {pendingForProject.map((req) => (
+                <div key={req.id} className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <p className="font-medium text-gray-800">
+                        {req.type === 'add' ? 'Add Request' : req.type === 'edit' ? 'Edit Request' : 'Delete Request'}
+                        <span className="text-gray-400 font-normal"> · </span>
+                        <span className="font-mono">{req.sampleId}</span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Requested by <span className="font-medium">{req.requestedBy}</span> · {new Date(req.submittedAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => approve(req.id)}
+                        className="px-3 py-1.5 bg-mint-600 text-white text-xs font-medium rounded-lg hover:bg-mint-700"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reject(req.id)}
+                        className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+
+                  {req.type === 'edit' && Array.isArray(req.changes) && req.changes.length > 0 && (
+                    <div className="mt-2 text-xs text-gray-700">
+                      {req.changes.map((c) => (
+                        <div key={c.field}>
+                          <span className="font-medium">{c.field}</span>: {String(c.from)} → {String(c.to)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {req.type === 'delete' && req.reason && (
+                    <p className="mt-2 text-xs text-gray-700">
+                      <span className="font-medium">Reason</span>: {req.reason}
+                    </p>
+                  )}
+
+                  {req.type === 'add' && req.proposedSample && (
+                    <div className="mt-2 text-xs text-gray-700">
+                      <div><span className="font-medium">Sample Type</span>: {req.proposedSample.sampleType || '—'}</div>
+                      <div><span className="font-medium">Disease</span>: {req.proposedSample.disease || '—'}</div>
+                      <div><span className="font-medium">Status</span>: {req.proposedSample.status || '—'}</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -98,7 +324,7 @@ export default function ProjectDetail() {
               state={{ projectId: project.id, lockProject: true, returnTo: `/projects/${project.id}` }}
               className="px-3 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
             >
-              Add Sample
+              {isCoResearcher && !isAdmin ? 'Request Add Sample' : 'Add Sample'}
             </Link>
           )}
         </div>
@@ -167,7 +393,7 @@ export default function ProjectDetail() {
                       >
                         View
                       </Link>
-                      {canEditSample(r) && (
+                      {canEditSampleDirect(r) && (
                         <Link
                           to={`/samples/${r.id}/edit`}
                           className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
@@ -175,13 +401,31 @@ export default function ProjectDetail() {
                           Edit
                         </Link>
                       )}
-                      {canDeleteSample(r) && (
+                      {canRequestEdit(r) && (
+                        <Link
+                          to={`/samples/${r.id}/edit`}
+                          state={{ requestEdit: true, returnTo: `/projects/${project.id}` }}
+                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
+                        >
+                          Request Edit
+                        </Link>
+                      )}
+                      {canDeleteSampleDirect(r) && (
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteId(r.id)}
                           className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
                         >
                           Delete
+                        </button>
+                      )}
+                      {canRequestDelete(r) && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRequestDelete(r)}
+                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
+                        >
+                          Request Delete
                         </button>
                       )}
                     </div>
@@ -204,6 +448,70 @@ export default function ProjectDetail() {
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={() => handleDeleteSample(confirmDeleteId)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmRequestDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
+            <p className="font-medium text-gray-800 mb-2">Request deletion of this sample?</p>
+            <p className="text-sm text-gray-500 mb-4">
+              Are you sure you want to request deletion of this sample? The Lead Researcher will need to approve this request.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmRequestDelete(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRequestDelete(confirmRequestDelete)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+              >
+                Submit Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmPublication && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
+            <p className="font-medium text-gray-800 mb-2">
+              {confirmPublication === 'publish' ? 'Publish this project?' : 'Unpublish this project?'}
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              {confirmPublication === 'publish'
+                ? 'Are you sure you want to publish this project? Once published, this project and all of its samples will become visible to all researchers and students in the system.'
+                : 'Are you sure you want to unpublish this project? This project and all of its samples will be hidden from other researchers and students.'}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmPublication(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = confirmPublication === 'publish' ? 'Published' : 'Draft';
+                  updateProject(project.id, { publicationStatus: next });
+                  setConfirmPublication(null);
+                }}
+                className={`px-4 py-2 text-white rounded-lg text-sm font-medium ${
+                  confirmPublication === 'publish' ? 'bg-mint-600 hover:bg-mint-700' : 'bg-orange-600 hover:bg-orange-700'
+                }`}
+              >
+                Confirm
+              </button>
             </div>
           </div>
         </div>

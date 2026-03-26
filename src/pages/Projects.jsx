@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { PROJECT_STATUSES } from '../data/mockData';
 import { generateProjectId } from '../utils/projectId';
+import { PUBLICATION_STATUSES, canUserViewProject, getVisibleSamples, getProjectPublicationStatus } from '../utils/visibility';
 
-function ProjectForm({ project, onSave, onCancel }) {
+function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEditLeadResearcher }) {
   const { users, projects } = useData();
   const activeResearchers = (users || []).filter(
     (u) => u.role === 'Researcher' && u.status === 'Active'
@@ -17,17 +18,66 @@ function ProjectForm({ project, onSave, onCancel }) {
     startDate: project?.startDate ?? '',
     endDate: project?.endDate ?? '',
     leadResearcher: project?.leadResearcher ?? '',
+    coResearchers: Array.isArray(project?.coResearchers) ? project.coResearchers : [],
     status: project?.status ?? 'Active',
+    publicationStatus: getProjectPublicationStatus(project),
   });
   const previewId = !isEdit && form.name && form.startDate
-    ? generateProjectId(form.name, form.startDate, projects.length)
+    ? generateProjectId(form.name, form.startDate, projects)
     : '';
+
+  useEffect(() => {
+    if (isEdit) {
+      setForm({
+        name: project?.name ?? '',
+        description: project?.description ?? '',
+        startDate: project?.startDate ?? '',
+        endDate: project?.endDate ?? '',
+        leadResearcher: project?.leadResearcher ?? '',
+        coResearchers: Array.isArray(project?.coResearchers) ? project.coResearchers : [],
+        status: project?.status ?? 'Active',
+        publicationStatus: getProjectPublicationStatus(project),
+      });
+      return;
+    }
+    setForm({
+      name: '',
+      description: '',
+      startDate: '',
+      endDate: '',
+      leadResearcher: '',
+      coResearchers: [],
+      status: 'Active',
+      publicationStatus: 'Draft',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, isEdit]);
+
+  const availableCoResearchers = useMemo(() => {
+    const list = (users || [])
+      .filter((u) => u.status === 'Active' && (u.role === 'Researcher' || u.role === 'Admin'))
+      .map((u) => u.fullName)
+      .filter(Boolean);
+    return [...new Set(list)].filter((name) => name !== form.leadResearcher);
+  }, [users, form.leadResearcher]);
+
+  useEffect(() => {
+    setForm((f) => ({
+      ...f,
+      coResearchers: (Array.isArray(f.coResearchers) ? f.coResearchers : []).filter((n) => n && n !== f.leadResearcher),
+    }));
+  }, [form.leadResearcher]);
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onSave(form);
+        const cleaned = {
+          ...form,
+          coResearchers: (Array.isArray(form.coResearchers) ? form.coResearchers : [])
+            .filter((n) => n && n !== form.leadResearcher),
+        };
+        onSave(cleaned);
       }}
       className="space-y-3"
     >
@@ -73,6 +123,7 @@ function ProjectForm({ project, onSave, onCancel }) {
           value={form.startDate}
           onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          required
         />
         <input
           type="date"
@@ -85,8 +136,11 @@ function ProjectForm({ project, onSave, onCancel }) {
       <select
         value={form.leadResearcher}
         onChange={(e) => setForm((f) => ({ ...f, leadResearcher: e.target.value }))}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+        className={`w-full px-3 py-2 border rounded-lg text-sm ${
+          canEditLeadResearcher ? 'border-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed'
+        }`}
         required={activeResearchers.length > 0}
+        disabled={!canEditLeadResearcher}
       >
         {activeResearchers.length === 0 ? (
           <option value="" disabled>No active researchers available.</option>
@@ -99,6 +153,44 @@ function ProjectForm({ project, onSave, onCancel }) {
           </>
         )}
       </select>
+      {!canEditLeadResearcher && (
+        <p className="text-xs text-gray-500">
+          Lead Researcher can only be changed by an Admin.
+        </p>
+      )}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Co-Researchers</label>
+        {availableCoResearchers.length === 0 ? (
+          <div className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-500 bg-gray-50">
+            No eligible co-researchers available.
+          </div>
+        ) : (
+          <div className="border border-gray-300 rounded-lg p-3 max-h-44 overflow-auto space-y-2">
+            {availableCoResearchers.map((name) => {
+              const checked = Array.isArray(form.coResearchers) && form.coResearchers.includes(name);
+              return (
+                <label key={name} className="flex items-center gap-2 text-sm text-gray-800 select-none">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setForm((f) => {
+                        const prev = Array.isArray(f.coResearchers) ? f.coResearchers : [];
+                        if (isChecked) return { ...f, coResearchers: [...new Set([...prev, name])] };
+                        return { ...f, coResearchers: prev.filter((n) => n !== name) };
+                      });
+                    }}
+                    className="h-4 w-4 accent-mint-600"
+                  />
+                  <span>{name}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <p className="text-xs text-gray-500 mt-1">Click to select one or more co-researchers.</p>
+      </div>
       <select
         value={form.status}
         onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
@@ -108,6 +200,20 @@ function ProjectForm({ project, onSave, onCancel }) {
           <option key={s} value={s}>{s}</option>
         ))}
       </select>
+      {canSetPublicationStatus && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Publication Status</label>
+          <select
+            value={form.publicationStatus}
+            onChange={(e) => setForm((f) => ({ ...f, publicationStatus: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          >
+            {PUBLICATION_STATUSES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex gap-2">
         <button type="submit" className="px-3 py-1.5 bg-mint-600 text-white text-sm rounded-lg hover:bg-mint-700">
           Save
@@ -121,8 +227,9 @@ function ProjectForm({ project, onSave, onCancel }) {
 }
 
 export default function Projects() {
-  const { user, canManageProjects, isResearcher } = useAuth();
-  const { projects, samples, addProject, updateProject, deleteProject } = useData();
+  const location = useLocation();
+  const { user, canManageProjects, isResearcher, isAdmin } = useAuth();
+  const { projects, samples, addProject, updateProject, deleteProject, sendCoResearcherInvites, coResearcherInvites, respondToCoResearcherInvite } = useData();
 
   const canEditProject = (p) =>
     canManageProjects || (isResearcher && p.leadResearcher === user?.fullName);
@@ -130,31 +237,98 @@ export default function Projects() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterPublication, setFilterPublication] = useState('All');
 
-  const countByProject = samples.reduce((acc, s) => {
+  useEffect(() => {
+    const incoming = location.state?.filterPublication;
+    if (!incoming) return;
+    setFilterPublication(incoming);
+  }, [location.state]);
+
+  const visibleSamples = getVisibleSamples(samples, projects, user);
+  const countByProject = visibleSamples.reduce((acc, s) => {
     acc[s.projectId] = (acc[s.projectId] || 0) + 1;
     return acc;
   }, {});
 
-  const filteredProjects = projects.filter((p) => {
+  const visibleProjects = projects.filter((p) => canUserViewProject(user, p));
+  const projectOrder = useMemo(
+    () => new Map(projects.map((p, idx) => [p.id, idx])),
+    [projects]
+  );
+
+  const filteredProjects = visibleProjects.filter((p) => {
     const q = search.toLowerCase();
     const matchSearch = !search || [p.name, p.description, p.leadResearcher].some((v) => String(v ?? '').toLowerCase().includes(q));
     const matchStatus = !filterStatus || p.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+    const pub = getProjectPublicationStatus(p);
+    const matchPublication = filterPublication === 'All' || pub === filterPublication;
+    return matchSearch && matchStatus && matchPublication;
+  }).sort((a, b) => (projectOrder.get(b.id) ?? 0) - (projectOrder.get(a.id) ?? 0));
 
   const clearFilters = () => {
     setSearch('');
     setFilterStatus('');
+    setFilterPublication('All');
   };
 
   const handleSave = (data) => {
     if (modal === 'new') {
-      const id = generateProjectId(data.name, data.startDate, projects.length);
-      addProject({ ...data, id });
-    } else if (modal?.id) updateProject(modal.id, data);
+      const id = generateProjectId(data.name, data.startDate, projects);
+      if (!id) {
+        // Prevent creating a project with fallback "proj-..." id.
+        // Start Date is required to compute the START YEAR part of the ID.
+        // eslint-disable-next-line no-alert
+        alert('Please provide a Project Name and Start Date to generate a Project ID (ABC-YYYY-###).');
+        return;
+      }
+      const payload = canManageProjects ? data : { ...data, publicationStatus: 'Draft' };
+      addProject({ ...payload, id });
+    } else if (modal?.id) {
+      const existing = projects.find((p) => p.id === modal.id);
+      const payloadBase = canManageProjects
+        ? data
+        : { ...data, publicationStatus: existing?.publicationStatus };
+
+      // Co-Researcher invitation workflow:
+      // - additions become invites (not immediately added)
+      // - removals apply immediately
+      const prevCo = Array.isArray(existing?.coResearchers) ? existing.coResearchers : [];
+      const nextCo = Array.isArray(payloadBase?.coResearchers) ? payloadBase.coResearchers : [];
+      const added = nextCo.filter((n) => n && !prevCo.includes(n));
+      const removed = prevCo.filter((n) => n && !nextCo.includes(n));
+
+      // If an Admin adds themselves as a Co-Researcher, apply immediately (no invite needed).
+      const adminSelf = isAdmin && user?.fullName ? user.fullName : null;
+      const selfAdded = adminSelf ? added.includes(adminSelf) : false;
+      const inviteAdded = selfAdded ? added.filter((n) => n !== adminSelf) : added;
+
+      if (inviteAdded.length > 0) {
+        sendCoResearcherInvites({
+          projectId: existing.id,
+          invitedBy: user?.fullName || 'Unknown',
+          invitedToList: inviteAdded,
+        });
+        const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${existing.name}: ${inviteAdded.join(', ')}`;
+        try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+      }
+
+      const payload = {
+        ...payloadBase,
+        coResearchers: (() => {
+          const base = removed.length > 0 ? prevCo.filter((n) => !removed.includes(n)) : prevCo;
+          if (selfAdded && adminSelf && !base.includes(adminSelf)) return [...base, adminSelf];
+          return base;
+        })(),
+      };
+      updateProject(modal.id, payload);
+    }
     setModal(null);
   };
+
+  const myInvites = (coResearcherInvites || []).filter(
+    (i) => i.status === 'Pending' && i.invitedTo === user?.fullName
+  );
 
   const handleDelete = (id) => {
     deleteProject(id);
@@ -175,6 +349,60 @@ export default function Projects() {
           </button>
         )}
       </div>
+
+      {myInvites.length > 0 && (
+        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800">Co-Researcher Invitations</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              {myInvites.length} pending
+            </span>
+          </div>
+          <div className="space-y-2">
+            {myInvites.map((inv) => {
+              const proj = projects.find((p) => p.id === inv.projectId);
+              return (
+                <div key={inv.id} className="border border-gray-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-800">{proj?.name || inv.projectId}</p>
+                    <p className="text-xs text-gray-500">
+                      Invited by <span className="font-medium">{inv.invitedBy}</span> · {new Date(inv.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = respondToCoResearcherInvite(inv.id, 'Accepted');
+                        const msg = res
+                          ? `Invitation accepted. You are now a Co-Researcher on ${proj?.name || inv.projectId}.`
+                          : 'Invitation accepted.';
+                        try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+                      }}
+                      className="px-3 py-1.5 bg-mint-600 text-white text-xs font-medium rounded-lg hover:bg-mint-700"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = respondToCoResearcherInvite(inv.id, 'Declined');
+                        const msg = res
+                          ? `Invitation declined for ${proj?.name || inv.projectId}.`
+                          : 'Invitation declined.';
+                        try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
+                      }}
+                      className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-mint-100 p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap gap-3 items-center">
           <input
@@ -194,6 +422,17 @@ export default function Projects() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          {(isAdmin || isResearcher) && (
+            <select
+              value={filterPublication}
+              onChange={(e) => setFilterPublication(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-mint-500"
+            >
+              <option value="All">All Publication</option>
+              <option value="Published">Published</option>
+              <option value="Draft">Draft</option>
+            </select>
+          )}
           <button type="button" onClick={clearFilters} className="text-sm text-mint-600 hover:text-mint-800 font-medium">
             Clear Filters
           </button>
@@ -205,10 +444,10 @@ export default function Projects() {
             <tr>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Project ID</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Project Name</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Description</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Start Date</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">End Date</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Lead Researcher</th>
+              <th className="text-left py-3 px-4 font-semibold text-gray-700">Co-Researchers</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700"># Samples</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
@@ -219,24 +458,33 @@ export default function Projects() {
               <tr key={p.id} className="border-b border-mint-50 hover:bg-mint-50/50">
                 <td className="py-2 px-4">{p.id}</td>
                 <td className="py-2 px-4 font-medium">{p.name}</td>
-                <td className="py-2 px-4 max-w-xs truncate">{p.description}</td>
                 <td className="py-2 px-4">{p.startDate || '—'}</td>
                 <td className="py-2 px-4">{p.endDate || '—'}</td>
                 <td className="py-2 px-4">{p.leadResearcher}</td>
+                <td className="py-2 px-4 max-w-xs truncate">
+                  {(Array.isArray(p.coResearchers) && p.coResearchers.length > 0) ? p.coResearchers.join(', ') : '—'}
+                </td>
                 <td className="py-2 px-4">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                    p.status === 'Active' ? 'bg-green-100 text-green-800' :
-                    p.status === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {p.status}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      p.status === 'Active' ? 'bg-green-100 text-green-800' :
+                      p.status === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {p.status}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      getProjectPublicationStatus(p) === 'Published' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                    }`}>
+                      {getProjectPublicationStatus(p)}
+                    </span>
+                  </div>
                 </td>
                 <td className="py-2 px-4">{countByProject[p.id] ?? 0}</td>
-                <td className="py-2 px-4">
-                  <div className="flex flex-wrap gap-1.5">
+                <td className="py-2 px-4 whitespace-nowrap">
+                  <div className="flex flex-nowrap items-center gap-1">
                     <Link
                       to={`/projects/${p.id}`}
-                      className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                      className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                     >
                       View
                     </Link>
@@ -245,14 +493,14 @@ export default function Projects() {
                         <button
                           type="button"
                           onClick={() => setModal({ id: p.id, project: p })}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
+                          className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmDelete(p.id)}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
+                          className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
                         >
                           Delete
                         </button>
@@ -279,6 +527,8 @@ export default function Projects() {
               project={modal === 'new' ? null : modal.project}
               onSave={handleSave}
               onCancel={() => setModal(null)}
+              canSetPublicationStatus={canManageProjects}
+              canEditLeadResearcher={isAdmin}
             />
           </div>
         </div>

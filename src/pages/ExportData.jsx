@@ -2,9 +2,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Link } from 'react-router-dom';
 import { exportSamplesCSV, exportSamplesPDF } from '../utils/export';
+import { getVisibleSamples } from '../utils/visibility';
 
 export default function ExportData() {
-  const { canExportCSV, canExportPDF } = useAuth();
+  const { canExportCSV, canExportPDF, user } = useAuth();
   const { samples, organisms, projects } = useData();
 
   if (!canExportCSV && !canExportPDF) {
@@ -17,8 +18,10 @@ export default function ExportData() {
     );
   }
 
-  const handleExportCSV = () => exportSamplesCSV(samples, organisms, projects);
-  const handleExportPDF = () => exportSamplesPDF(samples, organisms, projects);
+  const visibleSamples = getVisibleSamples(samples, projects, user);
+
+  const handleExportCSV = () => exportSamplesCSV(visibleSamples, organisms, projects);
+  const handleExportPDF = () => exportSamplesPDF(visibleSamples, organisms, projects);
 
   return (
     <div className="max-w-lg">
@@ -27,7 +30,7 @@ export default function ExportData() {
         Export the full sample dataset. To export only filtered results, go to the Samples page, apply filters, and use the Export buttons there.
       </p>
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-6 space-y-4">
-        <p className="text-sm text-gray-500">Total samples: <span className="font-semibold text-gray-800">{samples.length}</span></p>
+        <p className="text-sm text-gray-500">Total samples: <span className="font-semibold text-gray-800">{visibleSamples.length}</span></p>
         <div className="flex flex-wrap gap-3">
           {canExportCSV && (
             <button

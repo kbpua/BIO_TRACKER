@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { KINGDOMS } from '../data/mockData';
+import { getVisibleSamples } from '../utils/visibility';
 
 function organismIdFromTaxonomy(taxonomyId) {
   const t = taxonomyId != null ? String(taxonomyId).trim() : '';
@@ -109,14 +110,15 @@ function OrganismForm({ organism, organisms, onSave, onCancel }) {
 }
 
 export default function Organisms() {
-  const { canManageOrganisms } = useAuth();
-  const { organisms, samples, addOrganism, updateOrganism, deleteOrganism } = useData();
+  const { canManageOrganisms, user } = useAuth();
+  const { organisms, samples, projects, addOrganism, updateOrganism, deleteOrganism } = useData();
   const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [search, setSearch] = useState('');
   const [filterKingdom, setFilterKingdom] = useState('');
 
-  const countByOrganism = samples.reduce((acc, s) => {
+  const visibleSamples = getVisibleSamples(samples, projects, user);
+  const countByOrganism = visibleSamples.reduce((acc, s) => {
     acc[s.organismId] = (acc[s.organismId] || 0) + 1;
     return acc;
   }, {});

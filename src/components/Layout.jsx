@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 
@@ -8,6 +9,71 @@ export function Layout({ children }) {
   const { user, logout, isAdmin, canExportData } = useAuth();
   const { pendingCount } = useData();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [toasts, setToasts] = useState([]);
+
+  const toastQueueKey = user?.fullName ? `biosample_toast_queue:${user.fullName}` : null;
+
+  const pushToast = (payload) => {
+    const toast = {
+      id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      message: String(payload?.message || ''),
+      variant: payload?.variant === 'error' ? 'error' : 'success',
+      durationMs: Number(payload?.durationMs) > 0 ? Number(payload.durationMs) : 4500,
+      createdAt: Date.now(),
+    };
+    setToasts((prev) => [toast, ...prev].slice(0, 3));
+  };
+
+  useEffect(() => {
+    // Per-user queued toasts: drain once per navigation for the currently logged-in user.
+    if (!toastQueueKey) return;
+    try {
+      const raw = sessionStorage.getItem(toastQueueKey);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length > 0) {
+        // Show oldest-first.
+        arr.forEach((p) => pushToast(p));
+      }
+      sessionStorage.removeItem(toastQueueKey);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, toastQueueKey]);
+
+  useEffect(() => {
+    // Allow same-route actions (approve/reject/etc.) to trigger toasts immediately.
+    const handler = (e) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      pushToast(detail);
+    };
+    window.addEventListener('biosample_flash', handler);
+    return () => window.removeEventListener('biosample_flash', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (toasts.length === 0) return undefined;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setToasts((prev) =>
+        prev.filter((t) => now - t.createdAt < t.durationMs)
+      );
+    }, 200);
+    return () => clearInterval(interval);
+  }, [toasts.length]);
+
+  const toastStyles = useMemo(() => ({
+    success: {
+      container: 'bg-mint-800 text-white border-mint-900/20',
+      bar: 'bg-mint-200/90',
+    },
+    error: {
+      container: 'bg-red-700 text-white border-red-900/20',
+      bar: 'bg-red-300/90',
+    },
+  }), []);
 
   const allNavItems = [
     navItem('/dashboard', 'Dashboard', '📊'),
@@ -74,7 +140,42 @@ export function Layout({ children }) {
           </button>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-auto relative">
+          {/* Toast notifications (upper-right) */}
+          <div className="fixed top-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
+            {toasts.map((t) => {
+              const style = toastStyles[t.variant] || toastStyles.success;
+              const elapsed = Date.now() - t.createdAt;
+              const pct = Math.max(0, Math.min(100, (elapsed / t.durationMs) * 100));
+              return (
+                <div
+                  key={t.id}
+                  className={`border rounded-2xl shadow-2xl overflow-hidden ${style.container} border-opacity-30`}
+                >
+                  <div className="p-4 flex items-start justify-between gap-3">
+                    <p className="text-sm leading-snug">{t.message}</p>
+                    <button
+                      type="button"
+                      onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
+                      className="text-sm font-medium opacity-90 hover:opacity-100"
+                      aria-label="Dismiss notification"
+                      title="Dismiss"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="h-1 bg-white/15">
+                    <div
+                      className={`h-full ${style.bar}`}
+                      style={{ width: `${100 - pct}%`, transition: 'width 200ms linear' }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {children}
+        </main>
       </div>
     </div>
   );

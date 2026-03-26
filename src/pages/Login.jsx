@@ -44,8 +44,14 @@ export default function Login() {
       setError('Passwords do not match.');
       return;
     }
-    if (registerForm.password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const pwd = registerForm.password || '';
+    const hasMinLen = pwd.length >= 8;
+    const hasLower = /[a-z]/.test(pwd);
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasNumber = /[0-9]/.test(pwd);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+    if (!(hasMinLen && hasLower && hasUpper && hasNumber && hasSpecial)) {
+      setError('Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.');
       return;
     }
     const existing = users.some((u) => u.email?.toLowerCase() === registerForm.email.toLowerCase());
@@ -190,10 +196,13 @@ export default function Login() {
                   value={registerForm.password}
                   onChange={(e) => setRegisterForm((f) => ({ ...f, password: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters (Aa1!...)"
                   required
-                  minLength={6}
+                  minLength={8}
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Must include at least 1 uppercase, 1 lowercase, 1 number, 1 special character, and be 8+ characters.
+                </p>
               </div>
               <div>
                 <label htmlFor="reg-confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">

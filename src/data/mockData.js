@@ -2,6 +2,9 @@
 export const MOCK_USERS = [
   { id: 'ADM-DMS-001', email: 'admin@biosample.com', password: 'admin123', fullName: 'Dr. Maria Santos', role: 'Admin', status: 'Active', dateCreated: '2024-01-15', createdBy: 'System' },
   { id: 'RES-DJDC-002', email: 'researcher@biosample.com', password: 'research123', fullName: 'Dr. Juan Dela Cruz', role: 'Researcher', status: 'Active', dateCreated: '2024-02-01', createdBy: 'Dr. Maria Santos' },
+  { id: 'RES-DMR-005', email: 'rivera@biosample.com', password: 'research123', fullName: 'Dr. Marco Rivera', role: 'Researcher', status: 'Active', dateCreated: '2024-02-05', createdBy: 'Dr. Maria Santos' },
+  { id: 'RES-DSG-006', email: 'garcia@biosample.com', password: 'research123', fullName: 'Dr. Sofia Garcia', role: 'Researcher', status: 'Active', dateCreated: '2024-02-06', createdBy: 'Dr. Maria Santos' },
+  { id: 'RES-DLA-007', email: 'aquino@biosample.com', password: 'research123', fullName: 'Dr. Liza Aquino', role: 'Researcher', status: 'Active', dateCreated: '2024-02-07', createdBy: 'Dr. Maria Santos' },
   { id: 'STU-AR-003', email: 'student@biosample.com', password: 'student123', fullName: 'Ana Reyes', role: 'Student', status: 'Active', dateCreated: '2024-02-10', createdBy: 'Dr. Maria Santos' },
   { id: 'RES-CM-004', email: 'pending@biosample.com', password: 'pending123', fullName: 'Carlo Mendoza', role: 'Researcher', status: 'Pending', dateCreated: '2024-02-26', createdBy: 'Self', pendingDaysRemaining: 2 },
 ];
@@ -20,11 +23,11 @@ export const MOCK_ORGANISMS = [
 
 // Test projects (at least 5) - IDs: [INITIALS]-[START_YEAR]-[INCREMENT]
 export const MOCK_PROJECTS = [
-  { id: 'HGV-2023-001', name: 'Human Genome Variant Study', description: 'Investigating genetic variants associated with rare diseases in Filipino populations.', startDate: '2023-06-01', endDate: null, leadResearcher: 'Dr. Maria Santos', status: 'Active' },
-  { id: 'RBR-2023-002', name: 'Rice Blast Resistance Genes', description: 'Identifying resistance genes in Philippine rice cultivars against Magnaporthe oryzae.', startDate: '2023-08-15', endDate: null, leadResearcher: 'Dr. Juan Dela Cruz', status: 'Active' },
-  { id: 'ECA-2022-003', name: 'E. coli Antibiotic Resistance', description: 'Mapping antibiotic resistance patterns in clinical E. coli isolates.', startDate: '2022-01-10', endDate: '2024-01-30', leadResearcher: 'Dr. Liza Aquino', status: 'Completed' },
-  { id: 'ZND-2023-004', name: 'Zebrafish Neural Development', description: 'Studying neural crest cell migration in zebrafish embryos.', startDate: '2023-09-01', endDate: null, leadResearcher: 'Dr. Marco Rivera', status: 'Active' },
-  { id: 'YFG-2023-005', name: 'Yeast Fermentation Genomics', description: 'Characterizing genomic adaptations in yeast under industrial fermentation conditions.', startDate: '2023-03-01', endDate: null, leadResearcher: 'Dr. Sofia Garcia', status: 'On Hold' },
+  { id: 'HGV-2023-001', name: 'Human Genome Variant Study', description: 'Investigating genetic variants associated with rare diseases in Filipino populations.', startDate: '2023-06-01', endDate: null, leadResearcher: 'Dr. Maria Santos', coResearchers: ['Dr. Juan Dela Cruz'], status: 'Active', publicationStatus: 'Published' },
+  { id: 'RBR-2023-002', name: 'Rice Blast Resistance Genes', description: 'Identifying resistance genes in Philippine rice cultivars against Magnaporthe oryzae.', startDate: '2023-08-15', endDate: null, leadResearcher: 'Dr. Juan Dela Cruz', coResearchers: ['Dr. Maria Santos'], status: 'Active', publicationStatus: 'Published' },
+  { id: 'ECA-2022-003', name: 'E. coli Antibiotic Resistance', description: 'Mapping antibiotic resistance patterns in clinical E. coli isolates.', startDate: '2022-01-10', endDate: '2024-01-30', leadResearcher: 'Dr. Liza Aquino', coResearchers: [], status: 'Completed', publicationStatus: 'Published' },
+  { id: 'ZND-2023-004', name: 'Zebrafish Neural Development', description: 'Studying neural crest cell migration in zebrafish embryos.', startDate: '2023-09-01', endDate: null, leadResearcher: 'Dr. Marco Rivera', coResearchers: ['Dr. Juan Dela Cruz', 'Dr. Sofia Garcia'], status: 'Active', publicationStatus: 'Draft' },
+  { id: 'YFG-2023-005', name: 'Yeast Fermentation Genomics', description: 'Characterizing genomic adaptations in yeast under industrial fermentation conditions.', startDate: '2023-03-01', endDate: null, leadResearcher: 'Dr. Sofia Garcia', coResearchers: [], status: 'On Hold', publicationStatus: 'Draft' },
 ];
 
 // Test samples (at least 15) - with client columns: Sample ID, Disease, Organism, Sample Type, Tissue Source, Study Purpose, Project
@@ -63,3 +66,59 @@ export const PROJECT_STATUSES = ['Active', 'Completed', 'On Hold'];
 export const KINGDOMS = ['Animalia', 'Plantae', 'Fungi', 'Bacteria', 'Archaea'];
 export const ROLES = ['Admin', 'Researcher', 'Student'];
 export const ACCOUNT_STATUSES = ['Active', 'Pending', 'Deactivated'];
+
+// Mock pending requests for demo purposes (stored in local state; no backend)
+export const MOCK_PENDING_REQUESTS_INITIAL = [
+  {
+    id: 'pr-1',
+    projectId: 'HGV-2023-001',
+    type: 'edit',
+    requestedBy: 'Dr. Juan Dela Cruz',
+    sampleRecordId: 's2',
+    sampleId: 'HGV-RNA-002',
+    submittedAt: '2026-03-25T09:00:00.000Z',
+    changes: [
+      { field: 'status', from: 'Active', to: 'Used' },
+    ],
+    proposedUpdates: { status: 'Used' },
+  },
+  {
+    id: 'pr-2',
+    projectId: 'HGV-2023-001',
+    type: 'delete',
+    requestedBy: 'Dr. Juan Dela Cruz',
+    sampleRecordId: 's7',
+    sampleId: 'HGV-BLD-007',
+    submittedAt: '2026-03-25T09:05:00.000Z',
+    reason: 'Sample is contaminated',
+  },
+];
+
+// Mock co-researcher invites for demo purposes (pending by default)
+// `hoursAgo` is converted to `createdAt` ISO when state initializes.
+export const MOCK_CO_RESEARCHER_INVITES_INITIAL = [
+  {
+    id: 'inv-seed-1',
+    projectId: 'HGV-2023-001',
+    invitedBy: 'Dr. Maria Santos',
+    invitedTo: 'Dr. Juan Dela Cruz',
+    status: 'Pending',
+    hoursAgo: 2,
+  },
+  {
+    id: 'inv-seed-2',
+    projectId: 'ZND-2023-004',
+    invitedBy: 'Dr. Marco Rivera',
+    invitedTo: 'Dr. Juan Dela Cruz',
+    status: 'Pending',
+    hoursAgo: 24,
+  },
+  {
+    id: 'inv-seed-3',
+    projectId: 'YFG-2023-005',
+    invitedBy: 'Dr. Sofia Garcia',
+    invitedTo: 'Dr. Juan Dela Cruz',
+    status: 'Pending',
+    hoursAgo: 72,
+  },
+];

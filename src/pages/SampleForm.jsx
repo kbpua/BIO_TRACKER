@@ -11,10 +11,11 @@ export default function SampleForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { user, canManageSamples, isAdmin, isResearcher } = useAuth();
-  const { samples, organisms, projects, users, addSample, updateSample, addActivity } = useData();
+  const { samples, organisms, projects, users, addSample, updateSample, addActivity, submitAddRequest, submitEditRequest } = useData();
 
   const lockProject = location.state?.lockProject && location.state?.projectId;
   const returnTo = location.state?.returnTo;
+  const isRequestEdit = Boolean(location.state?.requestEdit);
 
   const activeResearchers = (users || []).filter(
     (u) => u.role === 'Researcher' && u.status === 'Active'
@@ -41,6 +42,13 @@ export default function SampleForm() {
   const previewId = !isEdit && form.projectId && form.sampleType
     ? generateSampleId(selectedProject?.name, form.sampleType, samples.length)
     : '';
+
+  const isLeadResearcher = isResearcher && selectedProject?.leadResearcher === user?.fullName;
+  const isCoResearcher = isResearcher
+    && !isAdmin
+    && !isLeadResearcher
+    && Array.isArray(selectedProject?.coResearchers)
+    && selectedProject.coResearchers.includes(user?.fullName);
 
   useEffect(() => {
     if (!canManageSamples) {
@@ -83,11 +91,60 @@ export default function SampleForm() {
     return Object.keys(e).length === 0;
   };
 
+  const buildChanges = (before, after) => {
+    const fields = [
+      'disease',
+      'sampleType',
+      'organismId',
+      'projectId',
+      'tissueSource',
+      'studyPurpose',
+      'collectionDate',
+      'collectedBy',
+      'storageLocation',
+      'status',
+      'notes',
+    ];
+    return fields
+      .filter((k) => String(before?.[k] ?? '') !== String(after?.[k] ?? ''))
+      .map((k) => ({ field: k, from: before?.[k] ?? '', to: after?.[k] ?? '' }));
+  };
+
+  const formatChangesSummary = (changes) => {
+    if (!Array.isArray(changes) || changes.length === 0) return '';
+    return changes
+      .slice(0, 3)
+      .map((c) => `${c.field}: ${String(c.from)} → ${String(c.to)}`)
+      .join('; ') + (changes.length > 3 ? ` (+${changes.length - 3} more)` : '');
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
     if (isEdit) {
       const payload = { ...form, sampleId: sample.sampleId, sampleName: sample.sampleName };
+      if (isRequestEdit && isResearcher && !isAdmin) {
+        const changes = buildChanges(sample, payload);
+        submitEditRequest({
+          projectId: sample.projectId,
+          requestedBy: user?.fullName || 'Unknown',
+          sampleRecordId: sample.id,
+          sampleId: sample.sampleId,
+          proposedUpdates: payload,
+          changes,
+        });
+        addActivity(`${user?.fullName} submitted an edit request for sample ${sample.sampleId}`);
+        const summary = formatChangesSummary(changes);
+        const msg = summary
+          ? `Your edit request for ${sample.sampleId} has been submitted for approval. ${summary}`
+          : `Your edit request for ${sample.sampleId} has been submitted for approval by the Lead Researcher.`;
+        try {
+          const key = user?.fullName ? `biosample_toast_queue:${user.fullName}` : null;
+          if (key) sessionStorage.setItem(key, JSON.stringify([{ message: msg, variant: 'success' }]));
+        } catch {}
+        navigate(returnTo || '/samples');
+        return;
+      }
       updateSample(id, payload);
       addActivity(`${user?.fullName} updated sample ${sample.sampleId}`);
     } else {
@@ -98,6 +155,26 @@ export default function SampleForm() {
         sampleName: generatedId,
         collectedBy: form.collectedBy || user?.fullName || '',
       };
+      if (isCoResearcher) {
+        submitAddRequest({
+          projectId: payload.projectId,
+          requestedBy: user?.fullName || 'Unknown',
+          proposedSample: payload,
+          sampleId: generatedId,
+        });
+        addActivity(`${user?.fullName} submitted an add request for sample ${generatedId}`);
+        try {
+          const key = user?.fullName ? `biosample_toast_queue:${user.fullName}` : null;
+          if (key) {
+            sessionStorage.setItem(key, JSON.stringify([{
+              message: 'Your add request has been submitted for approval by the Lead Researcher.',
+              variant: 'success',
+            }]));
+          }
+        } catch {}
+        navigate(returnTo || '/samples');
+        return;
+      }
       addSample(payload);
       addActivity(`${user?.fullName} added sample ${generatedId}`);
     }
@@ -109,7 +186,7 @@ export default function SampleForm() {
   return (
     <div className="max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">
-        {isEdit ? 'Edit Sample' : 'Add Sample'}
+        {isEdit ? 'Edit Sample' : (isCoResearcher ? 'Request Add Sample' : 'Add Sample')}
       </h1>
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-mint-100 shadow-sm p-6 space-y-4">
         {isEdit ? (
@@ -285,7 +362,7 @@ export default function SampleForm() {
             type="submit"
             className="px-4 py-2 bg-mint-600 text-white font-medium rounded-lg hover:bg-mint-700"
           >
-            {isEdit ? 'Save' : 'Add Sample'}
+            {isEdit ? 'Save' : (isCoResearcher ? 'Request Add Sample' : 'Add Sample')}
           </button>
           <button
             type="button"
