@@ -79,7 +79,7 @@ export default function Samples() {
           {canManageSamples && (
             <Link
               to="/samples/new"
-              className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+              className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
             >
               Add Sample
             </Link>

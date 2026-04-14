@@ -21,15 +21,27 @@ import { useData } from '../contexts/DataContext';
 import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 
 function StatCard({ label, value, tone = 'mint' }) {
-  const toneStyles = {
-    mint: 'border-mint-200 bg-white text-mint-900',
-    amber: 'border-amber-200 bg-amber-50/70 text-amber-900',
-    rose: 'border-rose-200 bg-rose-50/70 text-rose-900',
+  const cardStyles = {
+    // Solid lighter-teal sibling to the sidebar's deeper teal.
+    mint: 'border-transparent bg-[#14B8A6] shadow-[0_4px_16px_rgba(0,0,0,0.10)]',
+    amber: 'border-amber-300 bg-amber-100 shadow-sm shadow-amber-900/5',
+    rose: 'border-rose-300 bg-rose-100 shadow-sm shadow-rose-900/5',
   };
+  const labelStyles = {
+    mint: 'text-white/85',
+    amber: 'text-amber-900/80',
+    rose: 'text-rose-900/80',
+  };
+  const valueStyles = {
+    mint: 'text-white',
+    amber: 'text-amber-950',
+    rose: 'text-rose-950',
+  };
+  const t = cardStyles[tone] ? tone : 'mint';
   return (
-    <div className={`rounded-xl border p-4 shadow-sm ${toneStyles[tone] || toneStyles.mint}`}>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
+    <div className={`rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.14)] ${cardStyles[t]}`}>
+      <p className={`text-xs font-medium uppercase tracking-wide ${labelStyles[t]}`}>{label}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums ${valueStyles[t]}`}>{value}</p>
     </div>
   );
 }
@@ -37,8 +49,8 @@ function StatCard({ label, value, tone = 'mint' }) {
 function ActionCard({ title, count, to, detail, tone = 'mint' }) {
   const toneStyles = {
     mint: 'border-mint-200 hover:border-mint-300 hover:bg-mint-50/60',
-    amber: 'border-amber-300 bg-amber-50/40 hover:bg-amber-50',
-    rose: 'border-rose-300 bg-rose-50/40 hover:bg-rose-50',
+    amber: 'border-amber-300 bg-amber-50/90 hover:border-amber-400 hover:bg-amber-100',
+    rose: 'border-rose-300 bg-rose-50/90 hover:border-rose-400 hover:bg-rose-100',
   };
   return (
     <Link
@@ -57,11 +69,81 @@ function ActionCard({ title, count, to, detail, tone = 'mint' }) {
 }
 
 const STATUS_COLORS = {
-  Active: '#22c55e',
+  Active: '#0d9488',
   Used: '#3b82f6',
   Expired: '#f59e0b',
   Contaminated: '#ef4444',
 };
+
+/** Donut chart for sample status with tooltips, total summary above chart, and legend tags (counts + %). */
+function SampleStatusPie({ data, emptyLabel = 'No sample status data.' }) {
+  const total = (data || []).reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+  if (!data || data.length === 0 || total === 0) {
+    return <p className="text-sm text-gray-500 min-h-[14rem] flex items-center justify-center">{emptyLabel}</p>;
+  }
+
+  const rows = [...data].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0));
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-right text-sm text-gray-600">
+        <span className="text-2xl font-bold tabular-nums text-gray-900">{total}</span>
+        <span className="ml-1.5 text-xs font-medium text-gray-500">total samples</span>
+      </p>
+      <div className="h-48 w-full min-h-[12rem]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
+            <Tooltip
+              formatter={(value, name) => {
+                const n = Number(value);
+                const pct = total ? ((n / total) * 100).toFixed(1) : '0';
+                return [`${n} sample${n === 1 ? '' : 's'} (${pct}%)`, String(name)];
+              }}
+            />
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius="42%"
+              outerRadius="68%"
+              paddingAngle={2}
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || '#0d9488'} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <ul className="flex flex-wrap justify-center gap-2 border-t border-mint-100 pt-3" aria-label="Sample status breakdown">
+        {rows.map((d) => {
+          const v = Number(d.value) || 0;
+          const pct = (v / total) * 100;
+          const fill = STATUS_COLORS[d.name] || '#0d9488';
+          return (
+            <li
+              key={d.name}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs shadow-sm"
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm ring-1 ring-black/10"
+                style={{ backgroundColor: fill }}
+                aria-hidden
+              />
+              <span className="font-semibold text-gray-800">{d.name}</span>
+              <span className="tabular-nums text-gray-600">
+                {v}
+                <span className="text-gray-400"> ({pct.toFixed(1)}%)</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function parseActivityDaysAgo(timeAgo, index) {
   const raw = String(timeAgo || '').toLowerCase().trim();
@@ -446,14 +528,14 @@ export default function Dashboard() {
           <section className="rounded-xl border border-mint-100 bg-white p-3 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
               {pendingCount > 0 && (
-                <Link to="/users" className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+                <Link to="/users" className="inline-flex items-center rounded-full border border-amber-400 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-200/90 transition-colors">
                   {pendingCount} accounts pending approval
                 </Link>
               )}
               {(pendingRequests || []).length > 0 && (
                 <Link
                   to={firstPendingProjectId ? `/projects/${firstPendingProjectId}` : '/projects'}
-                  className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-900"
+                  className="inline-flex items-center rounded-full border border-rose-400 bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-950 hover:bg-rose-200/90 transition-colors"
                 >
                   {(pendingRequests || []).length} sample requests awaiting review
                 </Link>
@@ -462,13 +544,13 @@ export default function Dashboard() {
                 <Link
                   to="/projects"
                   state={{ filterPublication: 'Draft' }}
-                  className="inline-flex items-center rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-900"
+                  className="inline-flex items-center rounded-full border border-orange-400 bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-950 hover:bg-orange-200/90 transition-colors"
                 >
                   {draftProjectCount} unpublished projects
                 </Link>
               )}
               {pendingCount === 0 && (pendingRequests || []).length === 0 && draftProjectCount === 0 && (
-                <div className="inline-flex items-center rounded-full border border-green-300 bg-green-50 px-3 py-1 text-xs font-semibold text-green-800">
+                <div className="inline-flex items-center rounded-full border border-mint-400 bg-mint-100 px-3 py-1 text-xs font-semibold text-mint-900">
                   All clear - no pending actions
                 </div>
               )}
@@ -493,7 +575,7 @@ export default function Dashboard() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
-                      <Area type="monotone" dataKey="total" stroke="#0d9488" fill="#99f6e4" fillOpacity={0.7} />
+                      <Area type="monotone" dataKey="total" stroke="#0f766e" fill="#99f6e4" fillOpacity={0.7} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
@@ -504,31 +586,7 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">Sample Status Distribution</h3>
-              <div className="h-56">
-                {statusDistribution.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={statusDistribution}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={72}
-                        paddingAngle={2}
-                      >
-                        {statusDistribution.map((entry) => (
-                          <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || '#14b8a6'} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-sm text-gray-500 h-full flex items-center justify-center">No sample status data.</p>
-                )}
-              </div>
+              <SampleStatusPie data={statusDistribution} emptyLabel="No sample status data." />
             </div>
           </section>
 
@@ -543,7 +601,7 @@ export default function Dashboard() {
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={4} tickLine={false} />
                   <YAxis tick={{ fontSize: 10 }} allowDecimals={false} tickLine={false} axisLine={false} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="actions" stroke="#0d9488" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="actions" stroke="#0f766e" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -586,7 +644,7 @@ export default function Dashboard() {
               {firstLeadPendingProject && (
                 <Link
                   to={`/projects/${firstLeadPendingProject.project.id}`}
-                  className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-900"
+                  className="inline-flex items-center rounded-full border border-rose-400 bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-950 hover:bg-rose-200/90 transition-colors"
                 >
                   {firstLeadPendingProject.count} pending requests on {firstLeadPendingProject.project.name}
                 </Link>
@@ -595,7 +653,7 @@ export default function Dashboard() {
                 <Link
                   to="/projects"
                   state={{ filterPublication: 'Draft' }}
-                  className="inline-flex items-center rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-900"
+                  className="inline-flex items-center rounded-full border border-orange-400 bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-950 hover:bg-orange-200/90 transition-colors"
                 >
                   {myDraftLeadProjectCount} unpublished projects
                 </Link>
@@ -651,7 +709,7 @@ export default function Dashboard() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
-                      <Area type="monotone" dataKey="total" stroke="#0d9488" fill="#99f6e4" fillOpacity={0.7} />
+                      <Area type="monotone" dataKey="total" stroke="#0f766e" fill="#99f6e4" fillOpacity={0.7} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
@@ -662,31 +720,7 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">My Samples by Status</h3>
-              <div className="h-56">
-                {myStatusDistribution.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={myStatusDistribution}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={72}
-                        paddingAngle={2}
-                      >
-                        {myStatusDistribution.map((entry) => (
-                          <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || '#14b8a6'} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-sm text-gray-500 h-full flex items-center justify-center">No personal sample status data.</p>
-                )}
-              </div>
+              <SampleStatusPie data={myStatusDistribution} emptyLabel="No personal sample status data." />
             </div>
           </section>
 
@@ -722,7 +756,7 @@ export default function Dashboard() {
                     </td>
                     <td className="py-2.5 px-4">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        project.publicationStatus === 'Published' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                        project.publicationStatus === 'Published' ? 'bg-mint-100 text-mint-800' : 'bg-orange-100 text-orange-800'
                       }`}>
                         {project.publicationStatus}
                       </span>
@@ -799,7 +833,7 @@ export default function Dashboard() {
                       <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#14b8a6" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -810,31 +844,7 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">Sample Status Distribution</h3>
-              <div className="h-56">
-                {publishedStatusDistribution.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={publishedStatusDistribution}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={72}
-                        paddingAngle={2}
-                      >
-                        {publishedStatusDistribution.map((entry) => (
-                          <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || '#14b8a6'} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-sm text-gray-500 h-full flex items-center justify-center">No status data for published samples.</p>
-                )}
-              </div>
+              <SampleStatusPie data={publishedStatusDistribution} emptyLabel="No status data for published samples." />
             </div>
           </section>
 
@@ -842,14 +852,14 @@ export default function Dashboard() {
             {recentlyPublishedProjects.map((project) => (
               <div
                 key={project.id}
-                className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#166534] to-[#14532D] shadow-[0_4px_16px_rgba(0,0,0,0.12)] p-4 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(0,0,0,0.16)]"
+                className="rounded-2xl border border-white/10 bg-mint-800 bg-gradient-to-b from-[#0F766E] to-[#115E59] shadow-[0_4px_16px_rgba(15,118,110,0.18)] p-4 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_22px_rgba(15,118,110,0.22)]"
               >
                 <p className="text-sm font-semibold text-white truncate">{project.name}</p>
                 <p className="text-xs text-white/75 mt-1">Lead: {project.leadResearcher}</p>
                 <p className="text-xs text-white/65 mt-1">Samples: {project.sampleCount}</p>
                 <Link
                   to={`/projects/${project.id}`}
-                  className="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-white text-[#14532D] text-xs font-semibold hover:bg-emerald-50 transition-colors"
+                  className="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-white text-mint-800 text-xs font-semibold hover:bg-mint-50 transition-colors"
                 >
                   View Project
                 </Link>

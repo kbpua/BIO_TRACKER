@@ -146,12 +146,12 @@ export function Layout({ children }) {
             setIsHovered(false);
           }
         }}
-        className={`fixed z-40 left-3 top-3 bottom-3 md:left-4 md:top-4 md:bottom-4 rounded-3xl overflow-hidden bg-gradient-to-b from-[#166534] to-[#14532D] border border-white/10 shadow-[0_10px_28px_rgba(0,0,0,0.18)] flex flex-col shrink-0 transition-[width] duration-300 ease-out ${
+        className={`fixed z-40 left-3 top-3 bottom-3 md:left-4 md:top-4 md:bottom-4 rounded-3xl overflow-hidden bg-mint-800 bg-gradient-to-b from-[#0F766E] to-[#115E59] border border-white/10 shadow-[0_10px_28px_rgba(15,118,110,0.22)] flex flex-col shrink-0 transition-[width] duration-300 ease-out ${
           isExpanded ? 'w-[272px]' : 'w-[78px]'
         }`}
       >
         <div className={`${isExpanded ? 'p-3' : 'p-2'} border-b border-white/10 transition-all duration-300`}>
-          <div className={`rounded-xl border border-white/15 bg-white/10 backdrop-blur-sm ${isExpanded ? 'p-3' : 'p-2.5'} transition-all duration-300`}>
+          <div className={`rounded-xl border border-white/15 bg-white/[0.08] backdrop-blur-sm ${isExpanded ? 'p-3' : 'p-2.5'} transition-all duration-300`}>
             <div className="flex items-center justify-between">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ring-2 ring-white/35 overflow-hidden">
                 <img src="/logo.png" alt="BioSample Tracker logo" className="h-7 w-7 object-contain" />
@@ -161,7 +161,7 @@ export function Layout({ children }) {
                   data-sidebar-nav
                   type="button"
                   onClick={() => setIsPinned((v) => !v)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 bg-white/5 text-white/80 hover:text-white hover:bg-white/[0.08] transition-colors"
                   aria-label={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
                   title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
                 >
@@ -175,7 +175,7 @@ export function Layout({ children }) {
               }`}
             >
               <h2 className="font-semibold text-white text-base leading-tight">BioSample Tracker</h2>
-              <p className="text-xs text-white/65">Biological Sample Database</p>
+              <p className="text-xs text-white/[0.65]">Biological Sample Database</p>
             </div>
           </div>
         </div>
@@ -190,25 +190,25 @@ export function Layout({ children }) {
                   isExpanded ? 'w-full rounded-xl' : 'h-12 w-12 justify-center rounded-2xl'
                 } ${
                   isActive
-                    ? 'bg-white/95 text-[#14532D] shadow-[0_6px_16px_rgba(0,0,0,0.18)]'
-                    : 'text-white/85 hover:bg-white/10 hover:text-white'
+                    ? 'bg-white/95 text-[#115E59] shadow-[0_6px_16px_rgba(15,118,110,0.18)]'
+                    : 'text-white/85 hover:bg-white/[0.08] hover:text-white'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
                   {isExpanded && (
-                    <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-r-full transition-opacity ${isActive ? 'bg-emerald-400 opacity-100' : 'opacity-0 group-hover:opacity-40'}`} />
+                    <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-r-full transition-opacity ${isActive ? 'bg-[#14B8A6] opacity-100' : 'opacity-0 group-hover:opacity-40'}`} />
                   )}
                   <div className={`flex w-full items-center ${isExpanded ? 'px-3 py-2.5 gap-3' : 'justify-center'}`}>
-                    <Icon className={`${isExpanded ? 'h-5 w-5' : 'h-5.5 w-5.5'} shrink-0 ${isActive ? 'text-mint-700' : 'text-white/55 group-hover:text-white/90'}`} strokeWidth={2} aria-hidden />
+                    <Icon className={`${isExpanded ? 'h-5 w-5' : 'h-5.5 w-5.5'} shrink-0 ${isActive ? 'text-[#0D9488]' : 'text-white/55 group-hover:text-white/90'}`} strokeWidth={2} aria-hidden />
                     <div
                       className={`overflow-hidden transition-all duration-200 ${
                         isExpanded ? 'max-w-[170px] opacity-100' : 'max-w-0 opacity-0'
                       }`}
                     >
                       <p className={`text-sm leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}>{label}</p>
-                      <p className={`text-[11px] leading-tight mt-0.5 ${isActive ? 'text-emerald-700' : 'text-white/55 group-hover:text-white/75'}`}>{description}</p>
+                      <p className={`text-[11px] leading-tight mt-0.5 ${isActive ? 'text-[#14B8A6]' : 'text-white/55 group-hover:text-white/75'}`}>{description}</p>
                     </div>
                   </div>
                 </>
@@ -218,9 +218,9 @@ export function Layout({ children }) {
         </nav>
 
         <div className="px-2 pb-3 pt-2 border-t border-white/10">
-          <div className={`rounded-xl border border-white/15 bg-white/10 backdrop-blur-sm p-2.5 transition-all duration-300`}>
+          <div className={`rounded-xl border border-white/15 bg-white/[0.08] backdrop-blur-sm p-2.5 transition-all duration-300`}>
             <div className={`flex items-center ${isExpanded ? 'gap-2.5' : 'justify-center'}`}>
-              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-mint-700 text-xs font-semibold">
+              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-mint-800 text-xs font-semibold">
                 {getUserInitials(user?.fullName)}
               </div>
               <div
@@ -229,7 +229,7 @@ export function Layout({ children }) {
                 }`}
               >
                 <p className="text-sm font-semibold text-white truncate">{user?.fullName}</p>
-                <p className="text-xs text-white/65 truncate">{roleLabel}</p>
+                <p className="text-xs text-white/[0.65] truncate">{roleLabel}</p>
               </div>
             </div>
 

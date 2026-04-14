@@ -63,7 +63,7 @@ export default function UserManagement() {
         <button
           type="button"
           onClick={() => setModal('new')}
-          className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+          className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
         >
           Create User
         </button>
@@ -84,7 +84,7 @@ export default function UserManagement() {
                 <button
                   type="button"
                   onClick={() => handleApprove(u.id)}
-                  className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700 shadow-sm shrink-0"
+                  className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity shadow-sm shrink-0"
                 >
                   Approve
                 </button>
@@ -127,7 +127,7 @@ export default function UserManagement() {
                 </td>
                 <td className="py-2 px-4">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                    u.status === 'Active' ? 'bg-green-100 text-green-800' :
+                    u.status === 'Active' ? 'bg-mint-100 text-mint-800' :
                     u.status === 'Pending' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
                   }`}>
                     {u.status}
@@ -149,7 +149,7 @@ export default function UserManagement() {
                       <button
                         type="button"
                         onClick={() => handleApprove(u.id)}
-                        className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm shrink-0"
+                        className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white hover:opacity-95 transition-opacity shadow-sm shrink-0"
                       >
                         Approve
                       </button>
@@ -252,7 +252,7 @@ export default function UserManagement() {
                 ))}
               </select>
               <div className="flex gap-2 pt-2">
-                <button type="submit" className="px-4 py-2 bg-mint-600 text-white text-sm rounded-lg hover:bg-mint-700">Create</button>
+                <button type="submit" className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm rounded-lg hover:opacity-95 transition-opacity">Create</button>
                 <button type="button" onClick={() => setModal(null)} className="px-4 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
               </div>
             </form>

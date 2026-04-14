@@ -360,7 +360,7 @@ export default function SampleForm() {
         <div className="flex gap-2 pt-2">
           <button
             type="submit"
-            className="px-4 py-2 bg-mint-600 text-white font-medium rounded-lg hover:bg-mint-700"
+            className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white font-medium rounded-lg hover:opacity-95 transition-opacity"
           >
             {isEdit ? 'Save' : (isCoResearcher ? 'Request Add Sample' : 'Add Sample')}
           </button>

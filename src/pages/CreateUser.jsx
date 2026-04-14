@@ -26,7 +26,7 @@ function getPasswordStrength(password) {
 
   if (score <= 2) return { label: 'Weak', color: 'bg-red-500', width: 'w-1/3' };
   if (score <= 4) return { label: 'Medium', color: 'bg-amber-400', width: 'w-2/3' };
-  return { label: 'Strong', color: 'bg-emerald-500', width: 'w-full' };
+  return { label: 'Strong', color: 'bg-mint-500', width: 'w-full' };
 }
 
 function generateSecurePassword(length = 14) {
@@ -221,7 +221,7 @@ export default function CreateUser() {
       state === 'invalid'
         ? 'border-red-300 focus:border-red-400'
         : state === 'valid'
-          ? 'border-emerald-300 focus:border-emerald-400'
+          ? 'border-mint-300 focus:border-mint-400'
           : 'border-gray-200 focus:border-mint-500'
     }`;
 
@@ -234,7 +234,7 @@ export default function CreateUser() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
+              ? 'bg-mint-50 text-mint-800 border border-mint-200'
               : 'bg-red-50 text-red-800 border border-red-200'
           }`}
         >
@@ -258,7 +258,7 @@ export default function CreateUser() {
                   className={`${inputClass(fullNameState)} pr-9`}
                   placeholder="e.g. Dr. Maria Santos"
                 />
-                {fullNameState === 'valid' && <CircleCheck className="h-4 w-4 text-emerald-600 absolute right-3 top-1/2 -translate-y-1/2" />}
+                {fullNameState === 'valid' && <CircleCheck className="h-4 w-4 text-mint-600 absolute right-3 top-1/2 -translate-y-1/2" />}
                 {fullNameState === 'invalid' && <CircleX className="h-4 w-4 text-red-500 absolute right-3 top-1/2 -translate-y-1/2" />}
               </div>
               {fullNameState === 'invalid' && <p className="text-xs text-red-600 mt-1">Full name is required.</p>}
@@ -315,7 +315,7 @@ export default function CreateUser() {
                   className={`${inputClass(emailState)} pr-9`}
                   placeholder="user@biosample.com"
                 />
-                {emailState === 'valid' && <CircleCheck className="h-4 w-4 text-emerald-600 absolute right-3 top-1/2 -translate-y-1/2" />}
+                {emailState === 'valid' && <CircleCheck className="h-4 w-4 text-mint-600 absolute right-3 top-1/2 -translate-y-1/2" />}
                 {emailState === 'invalid' && <CircleX className="h-4 w-4 text-red-500 absolute right-3 top-1/2 -translate-y-1/2" />}
               </div>
               {touched.email && !EMAIL_RE.test(form.email) && (
@@ -385,11 +385,11 @@ export default function CreateUser() {
                   className={`${inputClass(confirmState)} pr-9`}
                   placeholder="Re-enter password"
                 />
-                {confirmState === 'valid' && <CircleCheck className="h-4 w-4 text-emerald-600 absolute right-3 top-1/2 -translate-y-1/2" />}
+                {confirmState === 'valid' && <CircleCheck className="h-4 w-4 text-mint-600 absolute right-3 top-1/2 -translate-y-1/2" />}
                 {confirmState === 'invalid' && <CircleX className="h-4 w-4 text-red-500 absolute right-3 top-1/2 -translate-y-1/2" />}
               </div>
               {touched.confirmPassword && form.confirmPassword.length > 0 && (
-                <p className={`text-xs mt-1 ${confirmState === 'valid' ? 'text-emerald-600' : 'text-red-600'}`}>
+                <p className={`text-xs mt-1 ${confirmState === 'valid' ? 'text-mint-600' : 'text-red-600'}`}>
                   {confirmState === 'valid' ? 'Passwords match.' : 'Passwords do not match.'}
                 </p>
               )}
@@ -487,7 +487,7 @@ export default function CreateUser() {
             type="submit"
             disabled={submitting}
             onClick={() => setSubmitMode('create')}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#166534] to-[#14532D] text-sm font-medium text-white hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-xl bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-sm font-medium text-white hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-mint-900/20 transition-opacity"
           >
             {submitting && submitMode === 'create' ? 'Creating...' : 'Create User'}
           </button>

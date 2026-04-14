@@ -141,7 +141,7 @@ export default function Login() {
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 bg-mint-600 text-white font-medium rounded-lg hover:bg-mint-700 transition-colors"
+                className="w-full py-2.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white font-medium rounded-lg hover:opacity-95 transition-opacity"
               >
                 Sign in
               </button>
@@ -154,7 +154,7 @@ export default function Login() {
                 </div>
               )}
               {successMessage && (
-                <div className="p-3 rounded-lg bg-green-50 text-green-800 text-sm border border-green-200">
+                <div className="p-3 rounded-lg bg-mint-50 text-mint-800 text-sm border border-mint-200">
                   {successMessage}
                 </div>
               )}
@@ -235,7 +235,7 @@ export default function Login() {
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 bg-mint-600 text-white font-medium rounded-lg hover:bg-mint-700 transition-colors"
+                className="w-full py-2.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white font-medium rounded-lg hover:opacity-95 transition-opacity"
               >
                 Register
               </button>

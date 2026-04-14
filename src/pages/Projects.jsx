@@ -216,7 +216,7 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
         </div>
       )}
       <div className="flex gap-2">
-        <button type="submit" className="px-3 py-1.5 bg-mint-600 text-white text-sm rounded-lg hover:bg-mint-700">
+        <button type="submit" className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm rounded-lg hover:opacity-95 transition-opacity">
           Save
         </button>
         <button type="button" onClick={onCancel} className="px-3 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">
@@ -344,7 +344,7 @@ export default function Projects() {
           <button
             type="button"
             onClick={() => setModal('new')}
-            className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+            className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
           >
             Add Project
           </button>
@@ -380,7 +380,7 @@ export default function Projects() {
                           : 'Invitation accepted.';
                         try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
                       }}
-                      className="px-3 py-1.5 bg-mint-600 text-white text-xs font-medium rounded-lg hover:bg-mint-700"
+                      className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
                     >
                       Approve
                     </button>
@@ -468,13 +468,13 @@ export default function Projects() {
                 <td className="py-2 px-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      p.status === 'Active' ? 'bg-green-100 text-green-800' :
+                      p.status === 'Active' ? 'bg-mint-100 text-mint-800' :
                       p.status === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
                     }`}>
                       {p.status}
                     </span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      getProjectPublicationStatus(p) === 'Published' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                      getProjectPublicationStatus(p) === 'Published' ? 'bg-mint-100 text-mint-800' : 'bg-orange-100 text-orange-800'
                     }`}>
                       {getProjectPublicationStatus(p)}
                     </span>

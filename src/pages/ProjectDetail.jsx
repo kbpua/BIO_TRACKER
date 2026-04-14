@@ -282,7 +282,7 @@ export default function ProjectDetail() {
                 <button
                   type="button"
                   onClick={() => setConfirmPublication('publish')}
-                  className="px-4 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+                  className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
                 >
                   Publish Project
                 </button>
@@ -358,7 +358,7 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={() => approve(req.id)}
-                        className="px-3 py-1.5 bg-mint-600 text-white text-xs font-medium rounded-lg hover:bg-mint-700"
+                        className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
                       >
                         Approve
                       </button>
@@ -412,7 +412,7 @@ export default function ProjectDetail() {
               <Link
                 to="/samples/new"
                 state={{ projectId: project.id, lockProject: true, returnTo: `/projects/${project.id}` }}
-                className="px-3 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+                className="px-3 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
               >
                 {isCoResearcher && !isAdmin ? 'Request Add Sample' : 'Add Sample'}
               </Link>
@@ -591,7 +591,7 @@ export default function ProjectDetail() {
                   setConfirmPublication(null);
                 }}
                 className={`px-4 py-2 text-white rounded-lg text-sm font-medium ${
-                  confirmPublication === 'publish' ? 'bg-mint-600 hover:bg-mint-700' : 'bg-orange-600 hover:bg-orange-700'
+                  confirmPublication === 'publish' ? 'bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] hover:opacity-95 transition-opacity' : 'bg-orange-600 hover:bg-orange-700'
                 }`}
               >
                 Confirm

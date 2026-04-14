@@ -40,7 +40,7 @@ export function EditIconLink({ to, state, label = 'Edit', compact, className = '
       to={to}
       state={state}
       onClick={onClick}
-      className={`${wrapClass('border border-mint-600 bg-mint-600 text-white hover:bg-mint-700', compact)} ${className}`}
+      className={`${wrapClass('border border-mint-700/90 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white hover:opacity-90 transition-opacity', compact)} ${className}`}
       aria-label={label}
       title={label}
     >
@@ -77,7 +77,7 @@ export function EditIconButton({ onClick, label = 'Edit', compact, className = '
     <button
       type="button"
       onClick={onClick}
-      className={`${wrapClass('border border-mint-600 bg-mint-600 text-white hover:bg-mint-700', compact)} ${className}`}
+      className={`${wrapClass('border border-mint-700/90 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white hover:opacity-90 transition-opacity', compact)} ${className}`}
       aria-label={label}
       title={label}
     >

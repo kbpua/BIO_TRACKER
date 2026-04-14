@@ -116,7 +116,7 @@ export default function SampleDetail() {
         <EduCard
           title="About the Organism"
           icon={Dna}
-          headerClass="bg-emerald-100 text-emerald-900"
+          headerClass="bg-mint-100 text-mint-900"
         >
           {organismContent ? (
             <>
