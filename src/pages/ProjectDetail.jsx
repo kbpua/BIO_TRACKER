@@ -3,6 +3,19 @@ import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { canUserChangeProjectPublication, canUserViewProject, getProjectPublicationStatus } from '../utils/visibility';
+import { exportSamplesCSV } from '../utils/export';
+import {
+  ViewIconLink,
+  EditIconLink,
+  RequestEditIconLink,
+  DeleteIconButton,
+  RequestDeleteIconButton,
+} from '../components/TableActionButtons';
+
+function sampleCreatedOrCollectedBy(sampleRow, fullName) {
+  if (!fullName) return false;
+  return sampleRow.collectedBy === fullName || sampleRow.createdBy === fullName;
+}
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -20,6 +33,7 @@ export default function ProjectDetail() {
     approvePendingRequest,
     rejectPendingRequest,
     submitDeleteRequest,
+    submitExportRequest,
   } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -35,6 +49,16 @@ export default function ProjectDetail() {
   const isLeadResearcher = isResearcher && project?.leadResearcher === user?.fullName;
   const isCoResearcher = isResearcher && Array.isArray(project?.coResearchers) && project.coResearchers.includes(user?.fullName);
   const canAddSample = isAdmin || isLeadResearcher || isCoResearcher;
+
+  const canExportFromProjectPage = isAdmin || (isResearcher && (isLeadResearcher || isCoResearcher));
+  const hasCoResearcherExportApproval =
+    isCoResearcher &&
+    Array.isArray(project?.approvedExporters) &&
+    project.approvedExporters.includes(user?.fullName);
+  const showExportCsvButton =
+    canExportFromProjectPage && (isAdmin || isLeadResearcher || (isCoResearcher && hasCoResearcherExportApproval));
+  const showRequestExportButton =
+    canExportFromProjectPage && isCoResearcher && !isAdmin && !isLeadResearcher && !hasCoResearcherExportApproval;
 
   const canEditSampleDirect = () => isAdmin || isLeadResearcher;
   const canDeleteSampleDirect = () => isAdmin || isLeadResearcher;
@@ -80,6 +104,47 @@ export default function ProjectDetail() {
     setSearch('');
     setFilterType('');
     setFilterStatus('');
+  };
+
+  const handleExportProjectCsv = () => {
+    if (!project) return;
+    const name = user?.fullName;
+    const rowsForExport =
+      isAdmin || isLeadResearcher
+        ? relatedSamples
+        : relatedSamples.filter((r) => sampleCreatedOrCollectedBy(r, name));
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `${project.id}_samples_${dateStr}.csv`;
+    exportSamplesCSV(rowsForExport, organisms, projects, filename);
+    addActivity(`${user?.fullName} exported CSV for project ${project.name}`);
+  };
+
+  const handleRequestExport = () => {
+    if (!project) return;
+    const created = submitExportRequest({
+      projectId: project.id,
+      requestedBy: user?.fullName || 'Unknown',
+    });
+    if (!created) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('biosample_flash', {
+            detail: { message: 'You already have a pending export request for this project.', variant: 'error' },
+          })
+        );
+      } catch {}
+      return;
+    }
+    try {
+      window.dispatchEvent(
+        new CustomEvent('biosample_flash', {
+          detail: {
+            message: 'Your export request has been submitted for approval by the Lead Researcher.',
+            variant: 'success',
+          },
+        })
+      );
+    } catch {}
   };
 
   const handleDeleteSample = (sampleId) => {
@@ -130,6 +195,10 @@ export default function ProjectDetail() {
       const msg = `Delete request approved. Sample ${approved.sampleId} has been removed.${reason}`;
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+    } else if (approved.type === 'export') {
+      const msg = `Export request approved. ${approved.requestedBy} can now export their samples from this project.`;
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+      enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
     } else {
       const type = approved.proposedSample?.sampleType ? ` (${approved.proposedSample.sampleType})` : '';
       const msg = `Add request approved. Sample ${approved.sampleId}${type} has been added.`;
@@ -141,6 +210,11 @@ export default function ProjectDetail() {
   const reject = (reqId) => {
     const rejected = rejectPendingRequest(reqId);
     if (!rejected) return;
+    if (rejected.type === 'export') {
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: 'Export request rejected.', variant: 'error' } })); } catch {}
+      enqueueToastForUser(rejected.requestedBy, { message: 'Export request rejected.', variant: 'error' });
+      return;
+    }
     const kind = rejected.type === 'edit' ? 'Edit' : rejected.type === 'delete' ? 'Delete' : 'Add';
     const extra = rejected.type === 'edit'
       ? formatChangesSummary(rejected.changes)
@@ -257,13 +331,28 @@ export default function ProjectDetail() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm">
                       <p className="font-medium text-gray-800">
-                        {req.type === 'add' ? 'Add Request' : req.type === 'edit' ? 'Edit Request' : 'Delete Request'}
-                        <span className="text-gray-400 font-normal"> · </span>
-                        <span className="font-mono">{req.sampleId}</span>
+                        {req.type === 'export'
+                          ? 'Export Request'
+                          : req.type === 'add'
+                            ? 'Add Request'
+                            : req.type === 'edit'
+                              ? 'Edit Request'
+                              : 'Delete Request'}
+                        {req.type !== 'export' && (
+                          <>
+                            <span className="text-gray-400 font-normal"> · </span>
+                            <span className="font-mono">{req.sampleId}</span>
+                          </>
+                        )}
                       </p>
                       <p className="text-xs text-gray-500">
                         Requested by <span className="font-medium">{req.requestedBy}</span> · {new Date(req.submittedAt).toLocaleString()}
                       </p>
+                      {req.type === 'export' && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Requesting CSV export of their own samples in this project
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -318,15 +407,35 @@ export default function ProjectDetail() {
           <h2 className="font-semibold text-gray-800">
             Related Samples
           </h2>
-          {canAddSample && (
-            <Link
-              to="/samples/new"
-              state={{ projectId: project.id, lockProject: true, returnTo: `/projects/${project.id}` }}
-              className="px-3 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
-            >
-              {isCoResearcher && !isAdmin ? 'Request Add Sample' : 'Add Sample'}
-            </Link>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {canAddSample && (
+              <Link
+                to="/samples/new"
+                state={{ projectId: project.id, lockProject: true, returnTo: `/projects/${project.id}` }}
+                className="px-3 py-2 bg-mint-600 text-white text-sm font-medium rounded-lg hover:bg-mint-700"
+              >
+                {isCoResearcher && !isAdmin ? 'Request Add Sample' : 'Add Sample'}
+              </Link>
+            )}
+            {showExportCsvButton && (
+              <button
+                type="button"
+                onClick={handleExportProjectCsv}
+                className="px-3 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
+              >
+                Export CSV
+              </button>
+            )}
+            {showRequestExportButton && (
+              <button
+                type="button"
+                onClick={handleRequestExport}
+                className="px-3 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
+              >
+                Request Export
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-sm text-gray-500 mb-4">{filtered.length} samples found</p>
 
@@ -386,47 +495,22 @@ export default function ProjectDetail() {
                   <td className="py-2 px-4">{r.studyPurpose ?? '—'}</td>
                   <td className="py-2 px-4">{r.projectName}</td>
                   <td className="py-2 px-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      <Link
-                        to={`/samples/${r.id}`}
-                        className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                      >
-                        View
-                      </Link>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <ViewIconLink to={`/samples/${r.id}`} label="View sample" />
                       {canEditSampleDirect(r) && (
-                        <Link
-                          to={`/samples/${r.id}/edit`}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
-                        >
-                          Edit
-                        </Link>
+                        <EditIconLink to={`/samples/${r.id}/edit`} label="Edit sample" />
                       )}
                       {canRequestEdit(r) && (
-                        <Link
+                        <RequestEditIconLink
                           to={`/samples/${r.id}/edit`}
                           state={{ requestEdit: true, returnTo: `/projects/${project.id}` }}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
-                        >
-                          Request Edit
-                        </Link>
+                        />
                       )}
                       {canDeleteSampleDirect(r) && (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteId(r.id)}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
-                        >
-                          Delete
-                        </button>
+                        <DeleteIconButton onClick={() => setConfirmDeleteId(r.id)} label="Delete sample" />
                       )}
                       {canRequestDelete(r) && (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmRequestDelete(r)}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
-                        >
-                          Request Delete
-                        </button>
+                        <RequestDeleteIconButton onClick={() => setConfirmRequestDelete(r)} />
                       )}
                     </div>
                   </td>

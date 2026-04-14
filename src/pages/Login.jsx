@@ -244,7 +244,7 @@ export default function Login() {
 
           {mode === 'login' && (
             <p className="mt-4 text-xs text-gray-400 text-center">
-              Test: admin@biosample.com / admin123 · researcher@biosample.com / research123 · student@biosample.com / student123 · pending@biosample.com / pending123 (pending)
+              Test: admin@biosample.com / admin123 · researcher@biosample.com / research123 · maria.co@biosample.com / research123 (Dr. Maria Santos — Researcher) · student@biosample.com / student123 · pending@biosample.com / pending123 (pending)
             </p>
           )}
         </div>

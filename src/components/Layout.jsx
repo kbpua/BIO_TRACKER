@@ -1,12 +1,21 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  LayoutDashboard,
+  FlaskConical,
+  FolderKanban,
+  Dna,
+  Users,
+  UserPlus,
+  Bell,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 
-const navItem = (to, label, icon) => ({ to, label, icon });
+const navItem = (to, label, Icon) => ({ to, label, Icon });
 
 export function Layout({ children }) {
-  const { user, logout, isAdmin, canExportData } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const { pendingCount } = useData();
   const navigate = useNavigate();
   const location = useLocation();
@@ -75,15 +84,17 @@ export function Layout({ children }) {
     },
   }), []);
 
-  const allNavItems = [
-    navItem('/dashboard', 'Dashboard', '📊'),
-    navItem('/samples', 'Samples', '🧪'),
-    navItem('/projects', 'Projects', '📁'),
-    navItem('/organisms', 'Organisms', '🦠'),
-    ...(isAdmin ? [navItem('/users', 'User Management', '👥')] : []),
-    ...(isAdmin ? [navItem('/create-user', 'Create User', '➕')] : []),
-    ...(canExportData ? [navItem('/export', 'Export Data', '📤')] : []),
-  ];
+  const allNavItems = useMemo(
+    () => [
+      navItem('/dashboard', 'Dashboard', LayoutDashboard),
+      navItem('/samples', 'Samples', FlaskConical),
+      navItem('/projects', 'Projects', FolderKanban),
+      navItem('/organisms', 'Organisms', Dna),
+      ...(isAdmin ? [navItem('/users', 'User Management', Users)] : []),
+      ...(isAdmin ? [navItem('/create-user', 'Create User', UserPlus)] : []),
+    ],
+    [isAdmin]
+  );
 
   const handleLogout = () => {
     logout();
@@ -98,19 +109,19 @@ export function Layout({ children }) {
           <h2 className="font-semibold text-mint-800 text-lg">BioSample Tracker</h2>
         </div>
         <nav className="p-2 flex-1">
-          {allNavItems.map(({ to, label, icon }) => (
+          {allNavItems.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-mint-100 text-mint-800'
                     : 'text-gray-600 hover:bg-mint-50 hover:text-mint-700'
                 }`
               }
             >
-              <span>{icon}</span>
+              <Icon className="h-[18px] w-[18px] shrink-0 opacity-90" strokeWidth={2} aria-hidden />
               {label}
             </NavLink>
           ))}
@@ -126,8 +137,9 @@ export function Layout({ children }) {
               {user?.role}
             </span>
             {isAdmin && pendingCount > 0 && (
-              <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                🔔 {pendingCount} pending
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                <Bell className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                {pendingCount} pending
               </span>
             )}
           </div>

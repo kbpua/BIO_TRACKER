@@ -5,6 +5,7 @@ import { useData } from '../contexts/DataContext';
 import { PROJECT_STATUSES } from '../data/mockData';
 import { generateProjectId } from '../utils/projectId';
 import { PUBLICATION_STATUSES, canUserViewProject, getVisibleSamples, getProjectPublicationStatus } from '../utils/visibility';
+import { ViewIconLink, EditIconButton, DeleteIconButton } from '../components/TableActionButtons';
 
 function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEditLeadResearcher }) {
   const { users, projects } = useData();
@@ -482,28 +483,19 @@ export default function Projects() {
                 <td className="py-2 px-4">{countByProject[p.id] ?? 0}</td>
                 <td className="py-2 px-4 whitespace-nowrap">
                   <div className="flex flex-nowrap items-center gap-1">
-                    <Link
-                      to={`/projects/${p.id}`}
-                      className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                    >
-                      View
-                    </Link>
+                    <ViewIconLink to={`/projects/${p.id}`} label="View project" compact />
                     {canEditProject(p) && (
                       <>
-                        <button
-                          type="button"
+                        <EditIconButton
+                          compact
+                          label="Edit project"
                           onClick={() => setModal({ id: p.id, project: p })}
-                          className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
+                        />
+                        <DeleteIconButton
+                          compact
+                          label="Delete project"
                           onClick={() => setConfirmDelete(p.id)}
-                          className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
-                        >
-                          Delete
-                        </button>
+                        />
                       </>
                     )}
                   </div>

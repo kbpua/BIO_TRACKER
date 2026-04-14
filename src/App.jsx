@@ -13,7 +13,6 @@ import Organisms from './pages/Organisms';
 import OrganismDetail from './pages/OrganismDetail';
 import UserManagement from './pages/UserManagement';
 import CreateUser from './pages/CreateUser';
-import ExportData from './pages/ExportData';
 
 function App() {
   const { user } = useAuth();
@@ -48,7 +47,6 @@ function App() {
           }
         />
         <Route path="create-user" element={<ProtectedRoute adminOnly><CreateUser /></ProtectedRoute>} />
-        <Route path="export" element={<ExportData />} />
       </Route>
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     </Routes>

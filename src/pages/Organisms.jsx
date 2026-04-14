@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { KINGDOMS } from '../data/mockData';
 import { getVisibleSamples } from '../utils/visibility';
+import { ViewIconLink, EditIconButton, DeleteIconButton } from '../components/TableActionButtons';
 
 function organismIdFromTaxonomy(taxonomyId) {
   const t = taxonomyId != null ? String(taxonomyId).trim() : '';
@@ -211,29 +212,12 @@ export default function Organisms() {
                 <td className="py-2 px-4">{o.kingdom}</td>
                 <td className="py-2 px-4">{countByOrganism[o.id] ?? 0}</td>
                 <td className="py-2 px-4">
-                  <div className="flex flex-wrap gap-1.5">
-                    <Link
-                      to={`/organisms/${o.id}`}
-                      className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                    >
-                      View
-                    </Link>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ViewIconLink to={`/organisms/${o.id}`} label="View organism" />
                     {canManageOrganisms && (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => setModal({ id: o.id, organism: o })}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDelete(o.id)}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
-                        >
-                          Delete
-                        </button>
+                        <EditIconButton label="Edit organism" onClick={() => setModal({ id: o.id, organism: o })} />
+                        <DeleteIconButton label="Delete organism" onClick={() => setConfirmDelete(o.id)} />
                       </>
                     )}
                   </div>

@@ -58,8 +58,6 @@ export function AuthProvider({ children }) {
   const canManageProjects = isAdmin;
   const canManageOrganisms = isAdmin;
   const canManageUsers = isAdmin;
-  const canExportData = isAdmin || isResearcher;
-
   const value = {
     user,
     login,
@@ -74,7 +72,6 @@ export function AuthProvider({ children }) {
     canManageProjects,
     canManageOrganisms,
     canManageUsers,
-    canExportData,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

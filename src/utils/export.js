@@ -6,7 +6,7 @@ function escapeCsvCell(str) {
   return s;
 }
 
-export function exportSamplesCSV(samples, organisms, projects) {
+export function exportSamplesCSV(samples, organisms, projects, downloadFilename) {
   const getOrg = (id) => organisms.find((o) => o.id === id)?.scientificName ?? '';
   const getProj = (id) => projects.find((p) => p.id === id)?.name ?? '';
   const headers = ['Sample ID', 'Disease', 'Organism', 'Sample Type', 'Tissue Source', 'Study Purpose', 'Project name'];
@@ -24,7 +24,8 @@ export function exportSamplesCSV(samples, organisms, projects) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `biosample-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.download = downloadFilename || `biosample-export-${dateStr}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

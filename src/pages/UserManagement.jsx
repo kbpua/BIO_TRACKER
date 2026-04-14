@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { ViewIconButton, DeleteIconButton } from '../components/TableActionButtons';
 import { useData } from '../contexts/DataContext';
 import { ROLES, ACCOUNT_STATUSES } from '../data/mockData';
 
@@ -139,13 +140,11 @@ export default function UserManagement() {
                 <td className="py-2 px-4">{u.createdBy}</td>
                 <td className="py-2 px-4 min-w-[200px]">
                   <div className="flex items-center flex-nowrap gap-2">
-                    <button
-                      type="button"
+                    <ViewIconButton
+                      pressed={viewUserId === u.id}
+                      label={viewUserId === u.id ? 'Hide user details' : 'View user details'}
                       onClick={() => setViewUserId(viewUserId === u.id ? null : u.id)}
-                      className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm shrink-0"
-                    >
-                      View
-                    </button>
+                    />
                     {u.status === 'Pending' && (
                       <button
                         type="button"
@@ -165,13 +164,7 @@ export default function UserManagement() {
                       </button>
                     )}
                     {u.id !== currentUser?.id && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(u.id)}
-                        className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm shrink-0"
-                      >
-                        Delete
-                      </button>
+                      <DeleteIconButton label="Delete user" onClick={() => setConfirmDelete(u.id)} />
                     )}
                   </div>
                 </td>

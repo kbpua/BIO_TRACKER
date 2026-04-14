@@ -2,6 +2,8 @@
 export const MOCK_USERS = [
   { id: 'ADM-DMS-001', email: 'admin@biosample.com', password: 'admin123', fullName: 'Dr. Maria Santos', role: 'Admin', status: 'Active', dateCreated: '2024-01-15', createdBy: 'System' },
   { id: 'RES-DJDC-002', email: 'researcher@biosample.com', password: 'research123', fullName: 'Dr. Juan Dela Cruz', role: 'Researcher', status: 'Active', dateCreated: '2024-02-01', createdBy: 'Dr. Maria Santos' },
+  // Same display name as Admin; use this Researcher login to demo co-researcher CSV export (filtered), since Admin always exports all samples.
+  { id: 'RES-DMS2-008', email: 'maria.co@biosample.com', password: 'research123', fullName: 'Dr. Maria Santos', role: 'Researcher', status: 'Active', dateCreated: '2024-02-02', createdBy: 'Dr. Maria Santos' },
   { id: 'RES-DMR-005', email: 'rivera@biosample.com', password: 'research123', fullName: 'Dr. Marco Rivera', role: 'Researcher', status: 'Active', dateCreated: '2024-02-05', createdBy: 'Dr. Maria Santos' },
   { id: 'RES-DSG-006', email: 'garcia@biosample.com', password: 'research123', fullName: 'Dr. Sofia Garcia', role: 'Researcher', status: 'Active', dateCreated: '2024-02-06', createdBy: 'Dr. Maria Santos' },
   { id: 'RES-DLA-007', email: 'aquino@biosample.com', password: 'research123', fullName: 'Dr. Liza Aquino', role: 'Researcher', status: 'Active', dateCreated: '2024-02-07', createdBy: 'Dr. Maria Santos' },
@@ -24,7 +26,7 @@ export const MOCK_ORGANISMS = [
 // Test projects (at least 5) - IDs: [INITIALS]-[START_YEAR]-[INCREMENT]
 export const MOCK_PROJECTS = [
   { id: 'HGV-2023-001', name: 'Human Genome Variant Study', description: 'Investigating genetic variants associated with rare diseases in Filipino populations.', startDate: '2023-06-01', endDate: null, leadResearcher: 'Dr. Maria Santos', coResearchers: ['Dr. Juan Dela Cruz'], status: 'Active', publicationStatus: 'Published' },
-  { id: 'RBR-2023-002', name: 'Rice Blast Resistance Genes', description: 'Identifying resistance genes in Philippine rice cultivars against Magnaporthe oryzae.', startDate: '2023-08-15', endDate: null, leadResearcher: 'Dr. Juan Dela Cruz', coResearchers: ['Dr. Maria Santos'], status: 'Active', publicationStatus: 'Published' },
+  { id: 'RBR-2023-002', name: 'Rice Blast Resistance Genes', description: 'Identifying resistance genes in Philippine rice cultivars against Magnaporthe oryzae.', startDate: '2023-08-15', endDate: null, leadResearcher: 'Dr. Juan Dela Cruz', coResearchers: ['Dr. Maria Santos'], status: 'Active', publicationStatus: 'Published', approvedExporters: ['Dr. Maria Santos'] },
   { id: 'ECA-2022-003', name: 'E. coli Antibiotic Resistance', description: 'Mapping antibiotic resistance patterns in clinical E. coli isolates.', startDate: '2022-01-10', endDate: '2024-01-30', leadResearcher: 'Dr. Liza Aquino', coResearchers: [], status: 'Completed', publicationStatus: 'Published' },
   { id: 'ZND-2023-004', name: 'Zebrafish Neural Development', description: 'Studying neural crest cell migration in zebrafish embryos.', startDate: '2023-09-01', endDate: null, leadResearcher: 'Dr. Marco Rivera', coResearchers: ['Dr. Juan Dela Cruz', 'Dr. Sofia Garcia'], status: 'Active', publicationStatus: 'Draft' },
   { id: 'YFG-2023-005', name: 'Yeast Fermentation Genomics', description: 'Characterizing genomic adaptations in yeast under industrial fermentation conditions.', startDate: '2023-03-01', endDate: null, leadResearcher: 'Dr. Sofia Garcia', coResearchers: [], status: 'On Hold', publicationStatus: 'Draft' },
@@ -47,6 +49,8 @@ export const MOCK_SAMPLES_INITIAL = [
   { id: 's13', sampleId: 'ZND-RNA-013', sampleName: 'ZND-RNA-013', disease: 'N/A', organismId: 'NCBI-7955', projectId: 'ZND-2023-004', sampleType: 'RNA', tissueSource: 'Embryo', studyPurpose: 'Neural gene expression', collectionDate: '2024-02-20', collectedBy: 'Dr. Marco Rivera', storageLocation: 'Cryo Tank B-09', status: 'Active', notes: '' },
   { id: 's14', sampleId: 'SC-CUL-014', sampleName: 'SC-CUL-014', disease: 'N/A', organismId: 'NCBI-4932', projectId: 'YFG-2023-005', sampleType: 'Cell Culture', tissueSource: 'Yeast culture', studyPurpose: 'Fermentation genomics', collectionDate: '2024-02-22', collectedBy: 'Dr. Sofia Garcia', storageLocation: 'Fridge C-02 Rack 1', status: 'Active', notes: '' },
   { id: 's15', sampleId: 'HGV-DNA-015', sampleName: 'HGV-DNA-015', disease: 'Diabetes', organismId: 'NCBI-9606', projectId: 'HGV-2023-001', sampleType: 'DNA', tissueSource: 'Whole blood', studyPurpose: 'Variant discovery', collectionDate: '2024-02-26', collectedBy: 'Dr. Maria Santos', storageLocation: 'Freezer A-01 Shelf 4', status: 'Active', notes: '' },
+  { id: 's16', sampleId: 'RBR-DNA-016', sampleName: 'RBR-DNA-016', disease: 'Blast resistance', organismId: 'NCBI-4530', projectId: 'RBR-2023-002', sampleType: 'DNA', tissueSource: 'Leaf', studyPurpose: 'Susceptibility assay', collectionDate: '2024-03-01', collectedBy: 'Dr. Maria Santos', storageLocation: 'Freezer A-05 Shelf 1', status: 'Active', notes: '' },
+  { id: 's17', sampleId: 'RBR-RNA-017', sampleName: 'RBR-RNA-017', disease: 'N/A', organismId: 'NCBI-4530', projectId: 'RBR-2023-002', sampleType: 'RNA', tissueSource: 'Root', studyPurpose: 'Gene expression', collectionDate: '2024-03-05', collectedBy: 'Dr. Maria Santos', storageLocation: 'Cryo Tank B-10', status: 'Active', notes: '' },
 ];
 
 // Recent activity feed
@@ -91,6 +95,13 @@ export const MOCK_PENDING_REQUESTS_INITIAL = [
     sampleId: 'HGV-BLD-007',
     submittedAt: '2026-03-25T09:05:00.000Z',
     reason: 'Sample is contaminated',
+  },
+  {
+    id: 'pr-export-hgv-1',
+    projectId: 'HGV-2023-001',
+    type: 'export',
+    requestedBy: 'Dr. Juan Dela Cruz',
+    submittedAt: '2026-04-14T14:00:00.000Z',
   },
 ];
 

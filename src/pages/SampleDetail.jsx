@@ -1,4 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
+import { Dna, FlaskConical, Stethoscope, Microscope } from 'lucide-react';
+import { EditIconLink } from '../components/TableActionButtons';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { canUserViewProject } from '../utils/visibility';
@@ -10,11 +12,15 @@ import {
   FALLBACK_MESSAGE,
 } from '../data/educationalContent';
 
-function EduCard({ title, icon, children, headerClass }) {
+function EduCard({ title, icon: Icon, children, headerClass }) {
   return (
     <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm bg-white">
-      <div className={`px-4 py-3 flex items-center gap-2 border-b border-gray-200 ${headerClass || 'bg-mint-50'}`}>
-        <span className="text-lg" aria-hidden>{icon}</span>
+      <div className={`px-4 py-3 flex items-center gap-2.5 border-b border-gray-200 ${headerClass || 'bg-mint-50'}`}>
+        {Icon ? (
+          <span className="flex shrink-0 text-current opacity-90" aria-hidden>
+            <Icon className="h-5 w-5" strokeWidth={2} />
+          </span>
+        ) : null}
         <h3 className="font-semibold text-gray-800">{title}</h3>
       </div>
       <div className="p-4 text-sm text-gray-700 leading-relaxed">
@@ -83,7 +89,12 @@ export default function SampleDetail() {
 
       {/* Metadata */}
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-6">
-        <h1 className="text-xl font-bold text-gray-800 mb-4">Sample Details</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <h1 className="text-xl font-bold text-gray-800">Sample Details</h1>
+          {canManageSamples && (
+            <EditIconLink to={`/samples/${row.id}/edit`} label="Edit sample" />
+          )}
+        </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div><dt className="text-gray-500">Sample ID</dt><dd className="font-medium">{row.sampleId}</dd></div>
           <div><dt className="text-gray-500">Disease</dt><dd>{row.disease ?? '—'}</dd></div>
@@ -98,20 +109,13 @@ export default function SampleDetail() {
           <div><dt className="text-gray-500">Status</dt><dd>{row.status ?? '—'}</dd></div>
           <div className="sm:col-span-2"><dt className="text-gray-500">Notes</dt><dd>{row.notes || '—'}</dd></div>
         </dl>
-        {canManageSamples && (
-          <div className="mt-4">
-            <Link to={`/samples/${row.id}/edit`} className="text-mint-600 hover:text-mint-800 font-medium text-sm">
-              Edit sample →
-            </Link>
-          </div>
-        )}
       </div>
 
       {/* Educational sections: 2x2 grid on lg, stack on small */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <EduCard
           title="About the Organism"
-          icon="🧬"
+          icon={Dna}
           headerClass="bg-emerald-100 text-emerald-900"
         >
           {organismContent ? (
@@ -127,7 +131,7 @@ export default function SampleDetail() {
 
         <EduCard
           title="About the Sample Type"
-          icon="🧪"
+          icon={FlaskConical}
           headerClass="bg-sky-100 text-sky-900"
         >
           {sampleTypeContent ? <p>{sampleTypeContent}</p> : <p>{FALLBACK_MESSAGE}</p>}
@@ -135,7 +139,7 @@ export default function SampleDetail() {
 
         <EduCard
           title="About the Disease"
-          icon="🩺"
+          icon={Stethoscope}
           headerClass="bg-amber-100 text-amber-900"
         >
           {diseaseContent ? <p>{diseaseContent}</p> : <p>{FALLBACK_MESSAGE}</p>}
@@ -143,7 +147,7 @@ export default function SampleDetail() {
 
         <EduCard
           title="About the Study Purpose"
-          icon="🔬"
+          icon={Microscope}
           headerClass="bg-violet-100 text-violet-900"
         >
           {studyPurposeContent ? <p>{studyPurposeContent}</p> : <p>{FALLBACK_MESSAGE}</p>}

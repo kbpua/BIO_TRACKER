@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { exportSamplesCSV, exportSamplesPDF } from '../utils/export';
+import { ViewIconLink, EditIconLink, DeleteIconButton } from '../components/TableActionButtons';
 import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 
 export default function Samples() {
@@ -194,28 +195,29 @@ export default function Samples() {
                   <td className="py-2 px-4">{r.projectName}</td>
                   <td className="py-2 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex flex-nowrap items-center gap-1">
-                        <Link
+                        <ViewIconLink
                           to={`/samples/${r.id}`}
-                          className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          View
-                        </Link>
+                          label="View sample"
+                          compact
+                          onClick={(e) => e.stopPropagation()}
+                        />
                         {canEditSample(r) && (
-                          <Link
+                          <EditIconLink
                             to={`/samples/${r.id}/edit`}
-                            className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium bg-mint-600 text-white hover:bg-mint-700 transition-colors shadow-sm"
-                          >
-                            Edit
-                          </Link>
+                            label="Edit sample"
+                            compact
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         )}
                         {canDeleteSample(r) && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setConfirmDelete(r.id); }}
-                            className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
-                          >
-                            Delete
-                          </button>
+                          <DeleteIconButton
+                            compact
+                            label="Delete sample"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDelete(r.id);
+                            }}
+                          />
                         )}
                       </div>
                     </td>

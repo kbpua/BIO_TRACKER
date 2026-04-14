@@ -124,6 +124,29 @@ export function DataProvider({ children }) {
     return req;
   }, []);
 
+  const submitExportRequest = useCallback(({
+    projectId,
+    requestedBy,
+  }) => {
+    let created = null;
+    const req = {
+      id: generateId('pr'),
+      projectId,
+      type: 'export',
+      requestedBy,
+      submittedAt: new Date().toISOString(),
+    };
+    setPendingRequests((prev) => {
+      const dup = prev.some(
+        (r) => r.projectId === projectId && r.requestedBy === requestedBy && r.type === 'export'
+      );
+      if (dup) return prev;
+      created = req;
+      return [req, ...prev];
+    });
+    return created;
+  }, []);
+
   const approvePendingRequest = useCallback((requestId) => {
     let approved = null;
     setPendingRequests((prev) => {
@@ -132,6 +155,18 @@ export function DataProvider({ children }) {
       return prev.filter((r) => r.id !== requestId);
     });
     if (!approved) return null;
+
+    if (approved.type === 'export') {
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== approved.projectId) return p;
+          const cur = Array.isArray(p.approvedExporters) ? p.approvedExporters : [];
+          if (cur.includes(approved.requestedBy)) return p;
+          return { ...p, approvedExporters: [...cur, approved.requestedBy] };
+        })
+      );
+      return approved;
+    }
 
     if (approved.type === 'add') {
       addSample(approved.proposedSample);
@@ -313,6 +348,7 @@ export function DataProvider({ children }) {
     submitAddRequest,
     submitEditRequest,
     submitDeleteRequest,
+    submitExportRequest,
     approvePendingRequest,
     rejectPendingRequest,
     sendCoResearcherInvites,

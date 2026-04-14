@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { ClipboardList } from 'lucide-react';
 import {
   AreaChart,
   Area,
@@ -611,9 +612,11 @@ export default function Dashboard() {
                   {recentPendingInvites.map((inv) => {
                     const proj = projects.find((p) => p.id === inv.projectId);
                     return (
-                      <p key={inv.id} className="text-xs text-indigo-900">
-                        <span className="mr-1">📋</span>
-                        {proj?.name || inv.projectId} - Invited by {inv.invitedBy} ({relativeTimeFromIso(inv.createdAt)})
+                      <p key={inv.id} className="flex items-start gap-1.5 text-xs text-indigo-900">
+                        <ClipboardList className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-90" strokeWidth={2} aria-hidden />
+                        <span>
+                          {proj?.name || inv.projectId} - Invited by {inv.invitedBy} ({relativeTimeFromIso(inv.createdAt)})
+                        </span>
                       </p>
                     );
                   })}
