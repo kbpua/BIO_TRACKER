@@ -840,13 +840,16 @@ export default function Dashboard() {
 
           <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {recentlyPublishedProjects.map((project) => (
-              <div key={project.id} className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
-                <p className="text-sm font-semibold text-gray-800 truncate">{project.name}</p>
-                <p className="text-xs text-gray-500 mt-1">Lead: {project.leadResearcher}</p>
-                <p className="text-xs text-gray-500 mt-1">Samples: {project.sampleCount}</p>
+              <div
+                key={project.id}
+                className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#166534] to-[#14532D] shadow-[0_4px_16px_rgba(0,0,0,0.12)] p-4 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(0,0,0,0.16)]"
+              >
+                <p className="text-sm font-semibold text-white truncate">{project.name}</p>
+                <p className="text-xs text-white/75 mt-1">Lead: {project.leadResearcher}</p>
+                <p className="text-xs text-white/65 mt-1">Samples: {project.sampleCount}</p>
                 <Link
                   to={`/projects/${project.id}`}
-                  className="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-mint-600 text-white text-xs font-medium hover:bg-mint-700"
+                  className="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-white text-[#14532D] text-xs font-semibold hover:bg-emerald-50 transition-colors"
                 >
                   View Project
                 </Link>

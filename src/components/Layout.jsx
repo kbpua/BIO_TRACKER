@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   FlaskConical,
@@ -7,22 +7,35 @@ import {
   Dna,
   Users,
   UserPlus,
-  Bell,
+  Pin,
+  PinOff,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useData } from '../contexts/DataContext';
 
-const navItem = (to, label, Icon) => ({ to, label, Icon });
+const navItem = (to, label, description, Icon) => ({ to, label, description, Icon });
+
+function getUserInitials(fullName) {
+  const tokens = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return 'U';
+  return tokens.slice(0, 2).map((t) => t[0]).join('').toUpperCase();
+}
 
 export function Layout({ children }) {
   const { user, logout, isAdmin } = useAuth();
-  const { pendingCount } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   const [toasts, setToasts] = useState([]);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const sidebarRef = useRef(null);
 
   const toastQueueKey = user?.fullName ? `biosample_toast_queue:${user.fullName}` : null;
-
+  const isExpanded = isPinned || isHovered;
+  const roleLabel = user?.role === 'Admin' ? 'System Administrator' : user?.role || 'User';
   const pushToast = (payload) => {
     const toast = {
       id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -73,6 +86,19 @@ export function Layout({ children }) {
     return () => clearInterval(interval);
   }, [toasts.length]);
 
+  useEffect(() => {
+    if (!isPinned) return undefined;
+    const onMouseDown = (e) => {
+      const el = sidebarRef.current;
+      if (!el) return;
+      if (!el.contains(e.target)) {
+        setIsPinned(false);
+      }
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    return () => window.removeEventListener('mousedown', onMouseDown);
+  }, [isPinned]);
+
   const toastStyles = useMemo(() => ({
     success: {
       container: 'bg-mint-800 text-white border-mint-900/20',
@@ -86,14 +112,14 @@ export function Layout({ children }) {
 
   const allNavItems = useMemo(
     () => [
-      navItem('/dashboard', 'Dashboard', LayoutDashboard),
-      navItem('/samples', 'Samples', FlaskConical),
-      navItem('/projects', 'Projects', FolderKanban),
-      navItem('/organisms', 'Organisms', Dna),
-      ...(isAdmin ? [navItem('/users', 'User Management', Users)] : []),
-      ...(isAdmin ? [navItem('/create-user', 'Create User', UserPlus)] : []),
+      navItem('/dashboard', 'Dashboard', 'Overview & monitoring', LayoutDashboard),
+      navItem('/samples', 'Samples', user?.role === 'Student' ? 'Browse records' : 'Manage records', FlaskConical),
+      navItem('/projects', 'Projects', 'Research catalog', FolderKanban),
+      navItem('/organisms', 'Organisms', 'Species directory', Dna),
+      ...(isAdmin ? [navItem('/users', 'User Management', 'Accounts & roles', Users)] : []),
+      ...(isAdmin ? [navItem('/create-user', 'Create User', 'Add new account', UserPlus)] : []),
     ],
-    [isAdmin]
+    [isAdmin, user?.role]
   );
 
   const handleLogout = () => {
@@ -102,56 +128,131 @@ export function Layout({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-mint-50/80 flex font-sans">
+    <div className="h-screen bg-mint-50/80 flex font-sans overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-mint-200 flex flex-col shrink-0">
-        <div className="p-4 border-b border-mint-100">
-          <h2 className="font-semibold text-mint-800 text-lg">BioSample Tracker</h2>
+      <aside
+        ref={sidebarRef}
+        onClick={(e) => {
+          if (isPinned || !isExpanded) return;
+          const target = e.target;
+          if (target instanceof Element && target.closest('[data-sidebar-nav]')) return;
+          setIsPinned(true);
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onFocusCapture={() => setIsHovered(true)}
+        onBlurCapture={(e) => {
+          if (!isPinned && !e.currentTarget.contains(e.relatedTarget)) {
+            setIsHovered(false);
+          }
+        }}
+        className={`fixed z-40 left-3 top-3 bottom-3 md:left-4 md:top-4 md:bottom-4 rounded-3xl overflow-hidden bg-gradient-to-b from-[#166534] to-[#14532D] border border-white/10 shadow-[0_10px_28px_rgba(0,0,0,0.18)] flex flex-col shrink-0 transition-[width] duration-300 ease-out ${
+          isExpanded ? 'w-[272px]' : 'w-[78px]'
+        }`}
+      >
+        <div className={`${isExpanded ? 'p-3' : 'p-2'} border-b border-white/10 transition-all duration-300`}>
+          <div className={`rounded-xl border border-white/15 bg-white/10 backdrop-blur-sm ${isExpanded ? 'p-3' : 'p-2.5'} transition-all duration-300`}>
+            <div className="flex items-center justify-between">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ring-2 ring-white/35 overflow-hidden">
+                <img src="/logo.png" alt="BioSample Tracker logo" className="h-7 w-7 object-contain" />
+              </div>
+              {isExpanded && (
+                <button
+                  data-sidebar-nav
+                  type="button"
+                  onClick={() => setIsPinned((v) => !v)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  aria-label={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
+                  title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
+                >
+                  {isPinned ? <PinOff className="h-4 w-4" strokeWidth={2} /> : <Pin className="h-4 w-4" strokeWidth={2} />}
+                </button>
+              )}
+            </div>
+            <div
+              className={`overflow-hidden transition-all duration-300 ${
+                isExpanded ? 'max-h-16 opacity-100 mt-2' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <h2 className="font-semibold text-white text-base leading-tight">BioSample Tracker</h2>
+              <p className="text-xs text-white/65">Biological Sample Database</p>
+            </div>
+          </div>
         </div>
-        <nav className="p-2 flex-1">
-          {allNavItems.map(({ to, label, Icon }) => (
+        <nav className={`px-2 py-4 flex-1 overflow-hidden ${isExpanded ? 'space-y-1.5' : 'flex flex-col items-center gap-2'}`}>
+          {allNavItems.map(({ to, label, description, Icon }) => (
             <NavLink
               key={to}
               to={to}
+              data-sidebar-nav
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                `relative group flex items-center text-sm transition-all duration-200 ${
+                  isExpanded ? 'w-full rounded-xl' : 'h-12 w-12 justify-center rounded-2xl'
+                } ${
                   isActive
-                    ? 'bg-mint-100 text-mint-800'
-                    : 'text-gray-600 hover:bg-mint-50 hover:text-mint-700'
+                    ? 'bg-white/95 text-[#14532D] shadow-[0_6px_16px_rgba(0,0,0,0.18)]'
+                    : 'text-white/85 hover:bg-white/10 hover:text-white'
                 }`
               }
             >
-              <Icon className="h-[18px] w-[18px] shrink-0 opacity-90" strokeWidth={2} aria-hidden />
-              {label}
+              {({ isActive }) => (
+                <>
+                  {isExpanded && (
+                    <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-r-full transition-opacity ${isActive ? 'bg-emerald-400 opacity-100' : 'opacity-0 group-hover:opacity-40'}`} />
+                  )}
+                  <div className={`flex w-full items-center ${isExpanded ? 'px-3 py-2.5 gap-3' : 'justify-center'}`}>
+                    <Icon className={`${isExpanded ? 'h-5 w-5' : 'h-5.5 w-5.5'} shrink-0 ${isActive ? 'text-mint-700' : 'text-white/55 group-hover:text-white/90'}`} strokeWidth={2} aria-hidden />
+                    <div
+                      className={`overflow-hidden transition-all duration-200 ${
+                        isExpanded ? 'max-w-[170px] opacity-100' : 'max-w-0 opacity-0'
+                      }`}
+                    >
+                      <p className={`text-sm leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}>{label}</p>
+                      <p className={`text-[11px] leading-tight mt-0.5 ${isActive ? 'text-emerald-700' : 'text-white/55 group-hover:text-white/75'}`}>{description}</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
+
+        <div className="px-2 pb-3 pt-2 border-t border-white/10">
+          <div className={`rounded-xl border border-white/15 bg-white/10 backdrop-blur-sm p-2.5 transition-all duration-300`}>
+            <div className={`flex items-center ${isExpanded ? 'gap-2.5' : 'justify-center'}`}>
+              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-mint-700 text-xs font-semibold">
+                {getUserInitials(user?.fullName)}
+              </div>
+              <div
+                className={`overflow-hidden transition-all duration-200 ${
+                  isExpanded ? 'max-w-[170px] opacity-100' : 'max-w-0 opacity-0'
+                }`}
+              >
+                <p className="text-sm font-semibold text-white truncate">{user?.fullName}</p>
+                <p className="text-xs text-white/65 truncate">{roleLabel}</p>
+              </div>
+            </div>
+
+            <button
+              data-sidebar-nav
+              type="button"
+              onClick={handleLogout}
+              className={`mt-2 w-full inline-flex items-center rounded-lg border border-white/15 bg-white/8 text-white/90 hover:bg-red-500/25 hover:text-white hover:border-red-300/40 transition-colors ${
+                isExpanded ? 'justify-start gap-2 px-2.5 py-2 text-sm font-medium' : 'justify-center py-2'
+              }`}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              <span className={`overflow-hidden transition-all duration-200 ${isExpanded ? 'max-w-[120px] opacity-100' : 'max-w-0 opacity-0'}`}>
+                Logout
+              </span>
+            </button>
+          </div>
+        </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top navbar */}
-        <header className="h-14 bg-white border-b border-mint-200 flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-4">
-            <span className="font-medium text-gray-800">{user?.fullName}</span>
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-mint-100 text-mint-800">
-              {user?.role}
-            </span>
-            {isAdmin && pendingCount > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                <Bell className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
-                {pendingCount} pending
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Logout
-          </button>
-        </header>
-
+      <div className="flex-1 flex flex-col min-w-0 pl-[98px] md:pl-[114px]">
         <main className="flex-1 p-6 overflow-auto relative">
           {/* Toast notifications (upper-right) */}
           <div className="fixed top-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
