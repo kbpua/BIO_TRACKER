@@ -1,23 +1,16 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ViewIconButton, DeleteIconButton } from '../components/TableActionButtons';
 import { useData } from '../contexts/DataContext';
-import { ROLES, ACCOUNT_STATUSES } from '../data/mockData';
+import { ROLES } from '../data/mockData';
 
 export default function UserManagement() {
+  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const { users, updateUser, addUser, deleteUser } = useData();
-  const [modal, setModal] = useState(null);
+  const { users, updateUser, deleteUser } = useData();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [viewUserId, setViewUserId] = useState(null);
-  const [newUserForm, setNewUserForm] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    role: 'Researcher',
-    status: 'Pending',
-    createdBy: currentUser?.fullName ?? 'Admin',
-  });
 
   const pending = users.filter((u) => u.status === 'Pending');
 
@@ -31,17 +24,6 @@ export default function UserManagement() {
 
   const handleDeactivate = (id) => {
     updateUser(id, { status: 'Deactivated' });
-  };
-
-  const handleCreateUser = (e) => {
-    e.preventDefault();
-    addUser({
-      ...newUserForm,
-      dateCreated: new Date().toISOString().split('T')[0],
-      createdBy: currentUser?.fullName ?? 'Admin',
-    });
-    setNewUserForm({ fullName: '', email: '', password: '', role: 'Researcher', status: 'Active', createdBy: currentUser?.fullName ?? 'Admin' });
-    setModal(null);
   };
 
   const handleDelete = (id) => {
@@ -62,7 +44,7 @@ export default function UserManagement() {
         <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
         <button
           type="button"
-          onClick={() => setModal('new')}
+          onClick={() => navigate('/create-user')}
           className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
         >
           Create User
@@ -203,62 +185,6 @@ export default function UserManagement() {
           </div>
         );
       })()}
-
-      {modal === 'new' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Create User</h2>
-            <form onSubmit={handleCreateUser} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Full Name"
-                value={newUserForm.fullName}
-                onChange={(e) => setNewUserForm((f) => ({ ...f, fullName: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                required
-              />
-              <input
-                type="email"
-                placeholder="Email"
-                value={newUserForm.email}
-                onChange={(e) => setNewUserForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={newUserForm.password}
-                onChange={(e) => setNewUserForm((f) => ({ ...f, password: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                required
-              />
-              <select
-                value={newUserForm.role}
-                onChange={(e) => setNewUserForm((f) => ({ ...f, role: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              <select
-                value={newUserForm.status}
-                onChange={(e) => setNewUserForm((f) => ({ ...f, status: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              >
-                {ACCOUNT_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              <div className="flex gap-2 pt-2">
-                <button type="submit" className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm rounded-lg hover:opacity-95 transition-opacity">Create</button>
-                <button type="button" onClick={() => setModal(null)} className="px-4 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

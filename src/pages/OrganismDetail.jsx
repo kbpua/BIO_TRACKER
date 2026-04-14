@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { ViewIconLink } from '../components/TableActionButtons';
 import { PROJECT_STATUSES } from '../data/mockData';
 import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 
@@ -66,6 +67,9 @@ export default function OrganismDetail() {
   const uniqueSampleTypes = useMemo(() => [...new Set(samplesWithNames.map((s) => s.sampleType))].sort(), [samplesWithNames]);
   const uniqueSampleStatuses = useMemo(() => [...new Set(samplesWithNames.map((s) => s.status))].sort(), [samplesWithNames]);
 
+  const rowLinkClass =
+    'font-medium text-mint-700 hover:text-mint-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-mint-500/45 focus-visible:ring-offset-1 rounded-sm';
+
   if (!organism) {
     return (
       <div className="space-y-4">
@@ -121,19 +125,31 @@ export default function OrganismDetail() {
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Lead Researcher</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700"># Samples</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700 w-px whitespace-nowrap">View</th>
               </tr>
             </thead>
             <tbody>
               {filteredProjects.map((p) => (
                 <tr key={p.id} className="border-b border-mint-50 hover:bg-mint-50/50">
-                  <td className="py-2 px-4">{p.id}</td>
-                  <td className="py-2 px-4 font-medium">{p.name}</td>
+                  <td className="py-2 px-4">
+                    <Link to={`/projects/${p.id}`} className={rowLinkClass}>
+                      {p.id}
+                    </Link>
+                  </td>
+                  <td className="py-2 px-4">
+                    <Link to={`/projects/${p.id}`} className={rowLinkClass}>
+                      {p.name}
+                    </Link>
+                  </td>
                   <td className="py-2 px-4 max-w-xs truncate">{p.description}</td>
                   <td className="py-2 px-4">{p.startDate || '—'}</td>
                   <td className="py-2 px-4">{p.endDate || '—'}</td>
                   <td className="py-2 px-4">{p.leadResearcher}</td>
                   <td className="py-2 px-4">{p.status}</td>
                   <td className="py-2 px-4">{p.sampleCount}</td>
+                  <td className="py-2 px-4">
+                    <ViewIconLink to={`/projects/${p.id}`} label="View project" compact />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -173,18 +189,30 @@ export default function OrganismDetail() {
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Tissue Source</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Study Purpose</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Project name</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700 w-px whitespace-nowrap">View</th>
               </tr>
             </thead>
             <tbody>
               {filteredSamples.map((r) => (
                 <tr key={r.id} className="border-b border-mint-50 hover:bg-mint-50/50">
-                  <td className="py-2 px-4">{r.sampleId}</td>
+                  <td className="py-2 px-4">
+                    <Link to={`/samples/${r.id}`} className={rowLinkClass}>
+                      {r.sampleId}
+                    </Link>
+                  </td>
                   <td className="py-2 px-4">{r.disease ?? '—'}</td>
                   <td className="py-2 px-4">{r.organismName}</td>
                   <td className="py-2 px-4">{r.sampleType}</td>
                   <td className="py-2 px-4">{r.tissueSource ?? '—'}</td>
                   <td className="py-2 px-4">{r.studyPurpose ?? '—'}</td>
-                  <td className="py-2 px-4">{r.projectName}</td>
+                  <td className="py-2 px-4">
+                    <Link to={`/projects/${r.projectId}`} className={rowLinkClass}>
+                      {r.projectName}
+                    </Link>
+                  </td>
+                  <td className="py-2 px-4">
+                    <ViewIconLink to={`/samples/${r.id}`} label="View sample" compact />
+                  </td>
                 </tr>
               ))}
             </tbody>

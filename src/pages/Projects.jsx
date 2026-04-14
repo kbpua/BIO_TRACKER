@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -509,35 +510,60 @@ export default function Projects() {
         )}
       </div>
 
-      {modal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-xl">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              {modal === 'new' ? 'New Project' : 'Edit Project'}
-            </h2>
-            <ProjectForm
-              project={modal === 'new' ? null : modal.project}
-              onSave={handleSave}
-              onCancel={() => setModal(null)}
-              canSetPublicationStatus={canManageProjects}
-              canEditLeadResearcher={isAdmin}
-            />
-          </div>
-        </div>
-      )}
-
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
-            <p className="font-medium text-gray-800 mb-2">Delete this project?</p>
-            <p className="text-sm text-gray-500 mb-4">This action cannot be undone.</p>
-            <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setConfirmDelete(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button type="button" onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Delete</button>
+      {modal &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] overflow-y-auto overscroll-y-contain bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="project-modal-title"
+          >
+            <div className="flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
+              <div className="relative flex w-full max-w-lg max-h-[min(92dvh,52rem)] flex-col overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10">
+                <div className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl bg-gradient-to-r from-[#0F766E] to-[#115E59] px-4 py-2.5 text-white">
+                  <h2 id="project-modal-title" className="text-base font-semibold text-white">
+                    {modal === 'new' ? 'New Project' : 'Edit Project'}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setModal(null)}
+                    className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg text-xl leading-none text-white/90 hover:bg-white/15 hover:text-white"
+                    aria-label="Close dialog"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-b-2xl bg-white px-4 py-3">
+                  <ProjectForm
+                    project={modal === 'new' ? null : modal.project}
+                    onSave={handleSave}
+                    onCancel={() => setModal(null)}
+                    canSetPublicationStatus={canManageProjects}
+                    canEditLeadResearcher={isAdmin}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
+
+      {confirmDelete &&
+        createPortal(
+          <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-y-contain bg-black/50" role="dialog" aria-modal="true">
+            <div className="flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
+              <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-gray-200/90 bg-white p-4 shadow-xl sm:p-5">
+                <p className="font-medium text-gray-800">Delete this project?</p>
+                <p className="mt-1 text-sm text-gray-500">This action cannot be undone.</p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => setConfirmDelete(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Delete</button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
