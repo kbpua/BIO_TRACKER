@@ -250,7 +250,6 @@ export function AuthProvider({ children }) {
   const canManageSamples = isAdmin || isResearcher;
   const canDeleteSamples = isAdmin || isResearcher; // Researcher may delete only own (enforced per-row)
   const canExportCSV = isAdmin || isResearcher;
-  const canExportPDF = isAdmin;
   const canManageProjects = isAdmin;
   const canManageOrganisms = isAdmin;
   const canManageUsers = isAdmin;
@@ -267,7 +266,6 @@ export function AuthProvider({ children }) {
     canManageSamples,
     canDeleteSamples,
     canExportCSV,
-    canExportPDF,
     canManageProjects,
     canManageOrganisms,
     canManageUsers,

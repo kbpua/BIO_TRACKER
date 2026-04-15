@@ -204,6 +204,16 @@ export default function ProjectDetail() {
       const msg = `Export request approved. ${approved.requestedBy} can now export their samples from this project.`;
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+    } else if (approved.type === 'coResearcherInvite') {
+      const invitees = Array.isArray(approved.proposedUpdates?.invitedToList) ? approved.proposedUpdates.invitedToList : [];
+      const requesterMsg = invitees.length > 0
+        ? `Admin approved your co-researcher request for ${project?.name || approved.projectId}. Invites were sent to: ${invitees.join(', ')}.`
+        : `Admin approved your co-researcher request for ${project?.name || approved.projectId}.`;
+      const approverMsg = invitees.length > 0
+        ? `Co-researcher invite request approved. Invites sent to: ${invitees.join(', ')}.`
+        : 'Co-researcher invite request approved.';
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch {}
+      enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
     } else {
       const type = approved.proposedSample?.sampleType ? ` (${approved.proposedSample.sampleType})` : '';
       const msg = `Add request approved. Sample ${approved.sampleId}${type} has been added.`;
@@ -218,6 +228,18 @@ export default function ProjectDetail() {
     if (rejected.type === 'export') {
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: 'Export request rejected.', variant: 'error' } })); } catch {}
       enqueueToastForUser(rejected.requestedBy, { message: 'Export request rejected.', variant: 'error' });
+      return;
+    }
+    if (rejected.type === 'coResearcherInvite') {
+      const invitees = Array.isArray(rejected.proposedUpdates?.invitedToList) ? rejected.proposedUpdates.invitedToList : [];
+      const requesterMsg = invitees.length > 0
+        ? `Admin declined your co-researcher request for ${project?.name || rejected.projectId}. No invite was sent to: ${invitees.join(', ')}.`
+        : `Admin declined your co-researcher request for ${project?.name || rejected.projectId}.`;
+      const approverMsg = invitees.length > 0
+        ? `Co-researcher invite request declined. No invite sent to: ${invitees.join(', ')}.`
+        : 'Co-researcher invite request declined.';
+      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch {}
+      enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
       return;
     }
     const kind = rejected.type === 'edit' ? 'Edit' : rejected.type === 'delete' ? 'Delete' : 'Add';
@@ -338,12 +360,14 @@ export default function ProjectDetail() {
                       <p className="font-medium text-gray-800">
                         {req.type === 'export'
                           ? 'Export Request'
+                          : req.type === 'coResearcherInvite'
+                            ? 'Co-Researcher Invite Request'
                           : req.type === 'add'
                             ? 'Add Request'
                             : req.type === 'edit'
                               ? 'Edit Request'
                               : 'Delete Request'}
-                        {req.type !== 'export' && (
+                        {!['export', 'coResearcherInvite'].includes(req.type) && (
                           <>
                             <span className="text-gray-400 font-normal"> · </span>
                             <span className="font-mono">{req.sampleId}</span>
@@ -358,11 +382,17 @@ export default function ProjectDetail() {
                           Requesting CSV export of their own samples in this project
                         </p>
                       )}
+                      {req.type === 'coResearcherInvite' && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Requested co-researcher invite approval for: {(req.proposedUpdates?.invitedToList || []).join(', ') || '—'}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={() => approve(req.id)}
+                        disabled={req.type === 'coResearcherInvite' && !isAdmin}
                         className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
                       >
                         Approve
@@ -370,6 +400,7 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={() => reject(req.id)}
+                        disabled={req.type === 'coResearcherInvite' && !isAdmin}
                         className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
                       >
                         Reject

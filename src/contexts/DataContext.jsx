@@ -441,6 +441,100 @@ export function DataProvider({ children }) {
     return created;
   }, [supabaseEnabled]);
 
+  const submitCoResearcherInviteRequest = useCallback(({
+    projectId,
+    requestedBy,
+    invitedToList,
+  }) => {
+    let created = null;
+    const cleanInvitedToList = [...new Set((invitedToList || []).filter(Boolean))];
+    if (cleanInvitedToList.length === 0) return null;
+    const req = {
+      id: generateId('pr'),
+      projectId,
+      type: 'coResearcherInvite',
+      requestedBy,
+      submittedAt: new Date().toISOString(),
+      proposedUpdates: {
+        invitedToList: cleanInvitedToList,
+      },
+    };
+    setPendingRequests((prev) => {
+      const dup = prev.some((r) => (
+        r.projectId === projectId
+        && r.requestedBy === requestedBy
+        && r.type === 'coResearcherInvite'
+        && Array.isArray(r.proposedUpdates?.invitedToList)
+        && r.proposedUpdates.invitedToList.length === cleanInvitedToList.length
+        && r.proposedUpdates.invitedToList.every((name) => cleanInvitedToList.includes(name))
+      ));
+      if (dup) return prev;
+      created = req;
+      return [req, ...prev];
+    });
+    if (created && supabaseEnabled && supabase) {
+      supabase.from('pending_requests').insert({
+        id: created.id,
+        project_id: created.projectId,
+        type: created.type,
+        requested_by: created.requestedBy,
+        submitted_at: created.submittedAt,
+        proposed_updates: created.proposedUpdates || null,
+      }).then(({ error }) => {
+        if (error) console.error('Failed to save co-researcher invite request:', error.message);
+      });
+    }
+    return created;
+  }, [supabaseEnabled]);
+
+  const createCoResearcherInvites = useCallback(({
+    projectId,
+    invitedBy,
+    invitedToList,
+  }) => {
+    const now = new Date().toISOString();
+    const created = [];
+    setCoResearcherInvites((prev) => {
+      const existingKeys = new Set(
+        prev
+          .filter((i) => i.projectId === projectId && i.status === 'Pending')
+          .map((i) => `${i.projectId}::${i.invitedTo}`)
+      );
+      const next = [...prev];
+      (invitedToList || []).forEach((invitedTo) => {
+        const key = `${projectId}::${invitedTo}`;
+        if (!invitedTo || existingKeys.has(key)) return;
+        const invite = {
+          id: generateId('inv'),
+          projectId,
+          invitedBy,
+          invitedTo,
+          status: 'Pending',
+          createdAt: now,
+        };
+        existingKeys.add(key);
+        created.push(invite);
+        next.unshift(invite);
+      });
+      return next;
+    });
+    if (created.length > 0 && supabaseEnabled && supabase) {
+      supabase.from('co_researcher_invites').insert(
+        created.map((inv) => ({
+          id: inv.id,
+          project_id: inv.projectId,
+          invited_by: inv.invitedBy,
+          invited_to: inv.invitedTo,
+          status: inv.status,
+          created_at: inv.createdAt,
+        }))
+      ).then(({ error }) => {
+        if (error) console.error('Failed to save co-researcher invites:', error.message);
+      });
+    }
+    return created;
+  }, [supabaseEnabled]);
+
   const approvePendingRequest = useCallback((requestId) => {
     let approved = null;
     setPendingRequests((prev) => {
@@ -467,6 +561,15 @@ export function DataProvider({ children }) {
       return approved;
     }
 
+    if (approved.type === 'coResearcherInvite') {
+      createCoResearcherInvites({
+        projectId: approved.projectId,
+        invitedBy: approved.requestedBy,
+        invitedToList: approved.proposedUpdates?.invitedToList || [],
+      });
+      return approved;
+    }
+
     if (approved.type === 'add') {
       addSample(approved.proposedSample);
     } else if (approved.type === 'edit') {
@@ -478,7 +581,7 @@ export function DataProvider({ children }) {
     }
 
     return approved;
-  }, [addSample, deleteSample, supabaseEnabled]);
+  }, [addSample, createCoResearcherInvites, deleteSample, supabaseEnabled]);
 
   const rejectPendingRequest = useCallback((requestId) => {
     let rejected = null;
@@ -499,49 +602,7 @@ export function DataProvider({ children }) {
     projectId,
     invitedBy,
     invitedToList,
-  }) => {
-    const now = new Date().toISOString();
-    const created = [];
-    setCoResearcherInvites((prev) => {
-      const existingKeys = new Set(
-        prev
-          .filter((i) => i.projectId === projectId && i.status === 'Pending')
-          .map((i) => `${i.projectId}::${i.invitedTo}`)
-      );
-      const next = [...prev];
-      (invitedToList || []).forEach((invitedTo) => {
-        const key = `${projectId}::${invitedTo}`;
-        if (!invitedTo || existingKeys.has(key)) return;
-        const invite = {
-          id: generateId('inv'),
-          projectId,
-          invitedBy,
-          invitedTo,
-          status: 'Pending', // Pending | Accepted | Declined
-          createdAt: now,
-        };
-        existingKeys.add(key);
-        created.push(invite);
-        next.unshift(invite);
-      });
-      return next;
-    });
-    if (created.length > 0 && supabaseEnabled && supabase) {
-      supabase.from('co_researcher_invites').insert(
-        created.map((inv) => ({
-          id: inv.id,
-          project_id: inv.projectId,
-          invited_by: inv.invitedBy,
-          invited_to: inv.invitedTo,
-          status: inv.status,
-          created_at: inv.createdAt,
-        }))
-      ).then(({ error }) => {
-        if (error) console.error('Failed to save co-researcher invites:', error.message);
-      });
-    }
-    return created;
-  }, [supabaseEnabled]);
+  }) => createCoResearcherInvites({ projectId, invitedBy, invitedToList }), [createCoResearcherInvites]);
 
   const respondToCoResearcherInvite = useCallback((inviteId, decision) => {
     let invite = null;
@@ -788,6 +849,7 @@ export function DataProvider({ children }) {
     submitEditRequest,
     submitDeleteRequest,
     submitExportRequest,
+    submitCoResearcherInviteRequest,
     approvePendingRequest,
     rejectPendingRequest,
     sendCoResearcherInvites,

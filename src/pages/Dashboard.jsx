@@ -241,6 +241,18 @@ export default function Dashboard() {
     const req = (pendingRequests || []).find((r) => myProjectIds.has(r.projectId));
     return req?.projectId || myLeadProjects[0]?.id || null;
   }, [pendingRequests, myProjectIds, myLeadProjects]);
+  const adminSampleReviewRequests = useMemo(
+    () => (pendingRequests || []).filter((r) => r.type !== 'coResearcherInvite'),
+    [pendingRequests]
+  );
+  const adminCoResearcherReviewRequests = useMemo(
+    () => (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite'),
+    [pendingRequests]
+  );
+  const firstAdminSamplePendingProjectId = useMemo(() => {
+    const req = adminSampleReviewRequests.find((r) => r.projectId);
+    return req?.projectId || null;
+  }, [adminSampleReviewRequests]);
 
   const myInviteCount = useMemo(
     () => (coResearcherInvites || []).filter((i) => i.status === 'Pending' && i.invitedTo === user?.fullName).length,
@@ -480,8 +492,8 @@ export default function Dashboard() {
     { title: 'Pending account approvals', count: pendingCount, to: '/users', detail: 'Open User Management to approve accounts', tone: 'amber' },
     {
       title: 'Pending sample change requests',
-      count: (pendingRequests || []).length,
-      to: firstPendingProjectId ? `/projects/${firstPendingProjectId}` : '/projects',
+      count: adminSampleReviewRequests.length,
+      to: firstAdminSamplePendingProjectId ? `/projects/${firstAdminSamplePendingProjectId}` : '/projects',
       detail: 'Go straight to project queue and approve/reject',
       tone: 'rose',
     },
@@ -532,12 +544,20 @@ export default function Dashboard() {
                   {pendingCount} accounts pending approval
                 </Link>
               )}
-              {(pendingRequests || []).length > 0 && (
+              {adminSampleReviewRequests.length > 0 && (
                 <Link
-                  to={firstPendingProjectId ? `/projects/${firstPendingProjectId}` : '/projects'}
+                  to={firstAdminSamplePendingProjectId ? `/projects/${firstAdminSamplePendingProjectId}` : '/projects'}
                   className="inline-flex items-center rounded-full border border-rose-400 bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-950 hover:bg-rose-200/90 transition-colors"
                 >
-                  {(pendingRequests || []).length} sample requests awaiting review
+                  {adminSampleReviewRequests.length} sample requests awaiting review
+                </Link>
+              )}
+              {adminCoResearcherReviewRequests.length > 0 && (
+                <Link
+                  to="/projects"
+                  className="inline-flex items-center rounded-full border border-indigo-400 bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-950 hover:bg-indigo-200/90 transition-colors"
+                >
+                  {adminCoResearcherReviewRequests.length} co-researcher requests awaiting review
                 </Link>
               )}
               {draftProjectCount > 0 && (
@@ -549,7 +569,7 @@ export default function Dashboard() {
                   {draftProjectCount} unpublished projects
                 </Link>
               )}
-              {pendingCount === 0 && (pendingRequests || []).length === 0 && draftProjectCount === 0 && (
+              {pendingCount === 0 && adminSampleReviewRequests.length === 0 && adminCoResearcherReviewRequests.length === 0 && draftProjectCount === 0 && (
                 <div className="inline-flex items-center rounded-full border border-mint-400 bg-mint-100 px-3 py-1 text-xs font-semibold text-mint-900">
                   All clear - no pending actions
                 </div>

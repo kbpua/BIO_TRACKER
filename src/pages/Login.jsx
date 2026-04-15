@@ -1,17 +1,47 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 
 const REGISTER_ROLES = ['Researcher', 'Student'];
+
+function FieldErrorPopup({ message, onClose }) {
+  if (!message) return null;
+  return (
+    <div className="absolute left-0 top-full z-20 mt-1 w-full">
+      <div className="relative rounded-lg bg-red-600 text-white text-xs pl-3 pr-8 py-2 border border-red-500 shadow-md">
+        <span className="absolute -top-1 left-4 h-2 w-2 rotate-45 bg-red-600 border-l border-t border-red-500" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-1 right-2 text-white/90 hover:text-white"
+          aria-label="Close error message"
+        >
+          ×
+        </button>
+        {message}
+      </div>
+    </div>
+  );
+}
 
 export default function Login() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [registerEmailError, setRegisterEmailError] = useState('');
+  const [registerPasswordError, setRegisterPasswordError] = useState('');
+  const [registerConfirmError, setRegisterConfirmError] = useState('');
+  const [registerGeneralError, setRegisterGeneralError] = useState('');
+  const [dismissedPasswordError, setDismissedPasswordError] = useState(false);
+  const [dismissedConfirmError, setDismissedConfirmError] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [registerForm, setRegisterForm] = useState({
     fullName: '',
     email: '',
@@ -29,6 +59,11 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
+    const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailLooksValid) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await login(email, password, users);
@@ -48,9 +83,25 @@ export default function Login() {
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setRegisterEmailError('');
+    setRegisterPasswordError('');
+    setRegisterConfirmError('');
+    setRegisterGeneralError('');
+    setDismissedPasswordError(false);
+    setDismissedConfirmError(false);
     setSuccessMessage('');
+    if (!registerForm.fullName.trim() || !registerForm.email.trim() || !registerForm.password || !registerForm.confirmPassword) {
+      setRegisterGeneralError('Please fill out all required fields.');
+      return;
+    }
+    const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registerForm.email);
+    if (!emailLooksValid) {
+      setRegisterEmailError('Please enter a valid email address.');
+      return;
+    }
     if (registerForm.password !== registerForm.confirmPassword) {
-      setError('Passwords do not match.');
+      setRegisterConfirmError('Passwords do not match.');
+      setDismissedConfirmError(false);
       return;
     }
     const pwd = registerForm.password || '';
@@ -60,12 +111,13 @@ export default function Login() {
     const hasNumber = /[0-9]/.test(pwd);
     const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
     if (!(hasMinLen && hasLower && hasUpper && hasNumber && hasSpecial)) {
-      setError('Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.');
+      setRegisterPasswordError('Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.');
+      setDismissedPasswordError(false);
       return;
     }
     const existing = users.some((u) => u.email?.toLowerCase() === registerForm.email.toLowerCase());
     if (!isSupabaseAuth && existing) {
-      setError('An account with this email already exists.');
+      setRegisterEmailError('An account with this email already exists.');
       return;
     }
     const isResearcher = registerForm.role === 'Researcher';
@@ -77,7 +129,7 @@ export default function Login() {
         role: registerForm.role,
       });
       if (!result.success) {
-        setError(result.error || 'Registration failed.');
+        setRegisterGeneralError(result.error || 'Registration failed.');
         return;
       }
     } else {
@@ -128,9 +180,9 @@ export default function Login() {
           </div>
 
           {mode === 'login' ? (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-4" noValidate>
               {error && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+                <div className="p-3 rounded-lg bg-red-700 text-white text-sm border border-red-600 shadow-sm">
                   {error}
                 </div>
               )}
@@ -152,14 +204,24 @@ export default function Login() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                   Password
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showLoginPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showLoginPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
               <button
                 type="submit"
@@ -170,10 +232,10 @@ export default function Login() {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-                  {error}
+            <form onSubmit={handleRegisterSubmit} className="space-y-4" noValidate>
+              {registerGeneralError && (
+                <div className="p-3 rounded-lg bg-red-600 text-white text-sm border border-red-500 shadow-sm">
+                  {registerGeneralError}
                 </div>
               )}
               {successMessage && (
@@ -203,42 +265,88 @@ export default function Login() {
                   id="reg-email"
                   type="email"
                   value={registerForm.email}
-                  onChange={(e) => setRegisterForm((f) => ({ ...f, email: e.target.value }))}
+                  onChange={(e) => {
+                    setRegisterForm((f) => ({ ...f, email: e.target.value }));
+                    setRegisterEmailError('');
+                    setRegisterGeneralError('');
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
                   placeholder="you@biosample.com"
                   required
                 />
+                {registerEmailError && (
+                  <div className="mt-2 rounded-lg bg-red-600 text-white text-xs px-3 py-2 border border-red-500 shadow-sm">
+                    {registerEmailError}
+                  </div>
+                )}
               </div>
               <div>
                 <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700 mb-1">
                   Password
                 </label>
-                <input
-                  id="reg-password"
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm((f) => ({ ...f, password: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
-                  placeholder="At least 8 characters (Aa1!...)"
-                  required
-                  minLength={8}
-                />
-                <p className="text-xs text-gray-500 mt-1">
+                <div className="relative">
+                  <input
+                    id="reg-password"
+                    type={showRegisterPassword ? 'text' : 'password'}
+                    value={registerForm.password}
+                    onChange={(e) => {
+                      setRegisterForm((f) => ({ ...f, password: e.target.value }));
+                      setRegisterPasswordError('');
+                      setRegisterGeneralError('');
+                      setDismissedPasswordError(false);
+                    }}
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
+                    placeholder="At least 8 characters (Aa1!...)"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                    aria-label={showRegisterPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showRegisterPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                  <FieldErrorPopup
+                    message={dismissedPasswordError ? '' : registerPasswordError}
+                    onClose={() => setDismissedPasswordError(true)}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
                   Must include at least 1 uppercase, 1 lowercase, 1 number, 1 special character, and be 8+ characters.
                 </p>
               </div>
-              <div>
+              <div className="relative">
                 <label htmlFor="reg-confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
                   Confirm Password
                 </label>
-                <input
-                  id="reg-confirmPassword"
-                  type="password"
-                  value={registerForm.confirmPassword}
-                  onChange={(e) => setRegisterForm((f) => ({ ...f, confirmPassword: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
-                  placeholder="Confirm password"
-                  required
+                <div className="relative">
+                  <input
+                    id="reg-confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={registerForm.confirmPassword}
+                    onChange={(e) => {
+                      setRegisterForm((f) => ({ ...f, confirmPassword: e.target.value }));
+                      setRegisterConfirmError('');
+                      setRegisterGeneralError('');
+                      setDismissedConfirmError(false);
+                    }}
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint-500 focus:border-mint-500"
+                    placeholder="Confirm password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+                <FieldErrorPopup
+                  message={dismissedConfirmError ? '' : registerConfirmError}
+                  onClose={() => setDismissedConfirmError(true)}
                 />
               </div>
               <div>

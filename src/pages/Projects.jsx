@@ -231,7 +231,20 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
 export default function Projects() {
   const location = useLocation();
   const { user, canManageProjects, isResearcher, isAdmin } = useAuth();
-  const { projects, samples, addProject, updateProject, deleteProject, sendCoResearcherInvites, coResearcherInvites, respondToCoResearcherInvite } = useData();
+  const {
+    projects,
+    samples,
+    pendingRequests,
+    addProject,
+    updateProject,
+    deleteProject,
+    sendCoResearcherInvites,
+    submitCoResearcherInviteRequest,
+    approvePendingRequest,
+    rejectPendingRequest,
+    coResearcherInvites,
+    respondToCoResearcherInvite,
+  } = useData();
 
   const canEditProject = (p) =>
     canManageProjects || (isResearcher && p.leadResearcher === user?.fullName);
@@ -306,13 +319,34 @@ export default function Projects() {
       const inviteAdded = selfAdded ? added.filter((n) => n !== adminSelf) : added;
 
       if (inviteAdded.length > 0) {
-        sendCoResearcherInvites({
-          projectId: existing.id,
-          invitedBy: user?.fullName || 'Unknown',
-          invitedToList: inviteAdded,
-        });
-        const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${existing.name}: ${inviteAdded.join(', ')}`;
-        try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+        if (isAdmin) {
+          sendCoResearcherInvites({
+            projectId: existing.id,
+            invitedBy: user?.fullName || 'Unknown',
+            invitedToList: inviteAdded,
+          });
+          const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${existing.name}: ${inviteAdded.join(', ')}`;
+          try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+        } else {
+          const created = submitCoResearcherInviteRequest({
+            projectId: existing.id,
+            requestedBy: user?.fullName || 'Unknown',
+            invitedToList: inviteAdded,
+          });
+          if (!created) {
+            try {
+              window.dispatchEvent(new CustomEvent('biosample_flash', {
+                detail: {
+                  message: 'A matching co-researcher invite request is already pending admin approval.',
+                  variant: 'error',
+                },
+              }));
+            } catch {}
+          } else {
+            const msg = `Your request to add co-researcher${inviteAdded.length > 1 ? 's' : ''} (${inviteAdded.join(', ')}) was sent to Admin for approval.`;
+            try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+          }
+        }
       }
 
       const payload = {
@@ -331,6 +365,51 @@ export default function Projects() {
   const myInvites = (coResearcherInvites || []).filter(
     (i) => i.status === 'Pending' && i.invitedTo === user?.fullName
   );
+  const adminCoResearcherRequests = useMemo(
+    () => (isAdmin ? (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite') : []),
+    [isAdmin, pendingRequests]
+  );
+
+  const enqueueToastForUser = (fullName, payload) => {
+    if (!fullName) return;
+    const key = `biosample_toast_queue:${fullName}`;
+    try {
+      const raw = sessionStorage.getItem(key);
+      const prev = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(prev) ? prev : [];
+      sessionStorage.setItem(key, JSON.stringify([...arr, payload]));
+    } catch {}
+  };
+
+  const handleApproveCoResearcherRequest = (req) => {
+    const approved = approvePendingRequest(req.id);
+    if (!approved) return;
+    const invitees = Array.isArray(approved.proposedUpdates?.invitedToList) ? approved.proposedUpdates.invitedToList : [];
+    const proj = projects.find((p) => p.id === approved.projectId);
+    const approverMsg = invitees.length > 0
+      ? `Co-researcher invite request approved. Invites sent to: ${invitees.join(', ')}.`
+      : 'Co-researcher invite request approved.';
+    const requesterMsg = invitees.length > 0
+      ? `Admin approved your co-researcher request for ${proj?.name || approved.projectId}. Invites were sent to: ${invitees.join(', ')}.`
+      : `Admin approved your co-researcher request for ${proj?.name || approved.projectId}.`;
+    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch {}
+    enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
+  };
+
+  const handleRejectCoResearcherRequest = (req) => {
+    const rejected = rejectPendingRequest(req.id);
+    if (!rejected) return;
+    const invitees = Array.isArray(rejected.proposedUpdates?.invitedToList) ? rejected.proposedUpdates.invitedToList : [];
+    const proj = projects.find((p) => p.id === rejected.projectId);
+    const approverMsg = invitees.length > 0
+      ? `Co-researcher invite request declined. No invite sent to: ${invitees.join(', ')}.`
+      : 'Co-researcher invite request declined.';
+    const requesterMsg = invitees.length > 0
+      ? `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}. No invite was sent to: ${invitees.join(', ')}.`
+      : `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}.`;
+    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch {}
+    enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
+  };
 
   const handleDelete = async (id) => {
     const ok = await deleteProject(id);
@@ -399,6 +478,52 @@ export default function Projects() {
                           : 'Invitation declined.';
                         try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
                       }}
+                      className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isAdmin && adminCoResearcherRequests.length > 0 && (
+        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800">Co-Researcher Requests</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              {adminCoResearcherRequests.length} pending
+            </span>
+          </div>
+          <div className="space-y-2">
+            {adminCoResearcherRequests.map((req) => {
+              const proj = projects.find((p) => p.id === req.projectId);
+              const invitees = Array.isArray(req.proposedUpdates?.invitedToList) ? req.proposedUpdates.invitedToList : [];
+              return (
+                <div key={req.id} className="border border-gray-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-800">{proj?.name || req.projectId}</p>
+                    <p className="text-xs text-gray-500">
+                      Requested by <span className="font-medium">{req.requestedBy}</span> · {new Date(req.submittedAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Invite co-researcher{invitees.length > 1 ? 's' : ''}: {invitees.join(', ') || '—'}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleApproveCoResearcherRequest(req)}
+                      className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRejectCoResearcherRequest(req)}
                       className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
                     >
                       Decline

@@ -2,13 +2,13 @@ import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
-import { exportSamplesCSV, exportSamplesPDF } from '../utils/export';
+import { exportSamplesCSV } from '../utils/export';
 import { ViewIconLink, EditIconLink, DeleteIconButton } from '../components/TableActionButtons';
 import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 
 export default function Samples() {
   const navigate = useNavigate();
-  const { user, canManageSamples, canDeleteSamples, canExportCSV, canExportPDF, isAdmin, isResearcher } = useAuth();
+  const { user, canManageSamples, canDeleteSamples, canExportCSV, isAdmin, isResearcher } = useAuth();
   const { samples, organisms, projects, deleteSample, addActivity } = useData();
   const [search, setSearch] = useState('');
   const [filterOrganism, setFilterOrganism] = useState('');
@@ -66,10 +66,6 @@ export default function Samples() {
     addActivity(`${user?.fullName} exported CSV data`);
   };
 
-  const handleExportPDF = () => {
-    exportSamplesPDF(filtered, organisms, projects);
-  };
-
   const uniqueTypes = useMemo(() => [...new Set(samples.map((s) => s.sampleType))].sort(), [samples]);
   const uniqueStatuses = useMemo(() => [...new Set(samples.map((s) => s.status))].sort(), [samples]);
 
@@ -96,15 +92,6 @@ export default function Samples() {
               className="px-4 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
             >
               Export CSV
-            </button>
-          )}
-          {canExportPDF && (
-            <button
-              type="button"
-              onClick={handleExportPDF}
-              className="px-4 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
-            >
-              Export PDF
             </button>
           )}
         </div>

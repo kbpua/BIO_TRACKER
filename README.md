@@ -26,11 +26,11 @@ Log in as each role to see role-based menus, buttons, and permissions.
 
 - **Role-based UI**: Admin, Researcher, Student. Sidebar and actions change by role.
 - **Dashboard**: Stats (samples, projects, organisms; admin sees users and pending approvals) and recent activity feed.
-- **Samples**: Table with search and filters (organism, type, project, status). Add/Edit/Delete (by role), Export CSV/PDF (by role). Row click opens detail view.
+- **Samples**: Table with search and filters (organism, type, project, status). Add/Edit/Delete (by role), Export CSV (by role). Row click opens detail view.
 - **Projects & Organisms**: Tables; Admin can add/edit/delete.
 - **User Management** (Admin only): Approve pending accounts, change roles, deactivate, delete.
-- **Export**: CSV (Admin + Researcher), PDF (Admin only). Filtered export on Samples page; full export on Export Data page.
+- **Export**: CSV (Admin + Researcher). Filtered export on Samples page; full export on Export Data page.
 
 ## Tech stack
 
-- React 18, Vite 6, React Router 6, Tailwind CSS 3, jsPDF for PDF export.
+- React 18, Vite 6, React Router 6, Tailwind CSS 3.
