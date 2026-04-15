@@ -147,8 +147,13 @@ export default function ProjectDetail() {
     } catch {}
   };
 
-  const handleDeleteSample = (sampleId) => {
-    deleteSample(sampleId);
+  const handleDeleteSample = async (sampleId) => {
+    const ok = await deleteSample(sampleId);
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to delete sample in Supabase. Please check your permissions and try again.');
+      return;
+    }
     setConfirmDeleteId(null);
     addActivity(`${user?.fullName} deleted a sample from project ${project?.name}`);
   };

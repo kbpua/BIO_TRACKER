@@ -2,8 +2,16 @@ import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isHydratingSession } = useAuth();
   const location = useLocation();
+
+  if (isHydratingSession) {
+    return (
+      <div className="min-h-screen bg-mint-50 flex items-center justify-center p-6">
+        <p className="text-sm text-gray-600">Checking session...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;

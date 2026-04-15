@@ -42,10 +42,9 @@ export function getVisibleSamples(samples, projects, user) {
   const pList = Array.isArray(projects) ? projects : [];
   const projectById = new Map(pList.map((p) => [p.id, p]));
 
-  // Newest-first: later in array = more recent.
+  // Preserve source order from DataContext (already sorted newest to oldest).
   return sList
-    .map((s, idx) => ({ s, idx }))
-    .filter(({ s }) => {
+    .filter((s) => {
       const proj = projectById.get(s.projectId);
       // If project is missing from mock data, don't hide the sample (prototype resilience).
       if (!proj) return true;
@@ -53,7 +52,6 @@ export function getVisibleSamples(samples, projects, user) {
       if (isProjectPublished(proj)) return true;
       return user?.role === 'Researcher' && isUserOnProjectTeam(user, proj);
     })
-    .sort((a, b) => b.idx - a.idx)
-    .map(({ s }) => s);
+    .map((s) => s);
 }
 

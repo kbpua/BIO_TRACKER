@@ -26,8 +26,13 @@ export default function UserManagement() {
     updateUser(id, { status: 'Deactivated' });
   };
 
-  const handleDelete = (id) => {
-    deleteUser(id);
+  const handleDelete = async (id) => {
+    const ok = await deleteUser(id);
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to delete user in Supabase Authentication. Please make sure the admin delete RPC migration has been applied.');
+      return;
+    }
     setConfirmDelete(null);
   };
 

@@ -36,3 +36,19 @@ export function generateUserId(role, fullName, currentUserCount) {
   const num = String((currentUserCount || 0) + 1).padStart(3, '0');
   return `${code}-${initials}-${num}`;
 }
+
+function extractIncrement(candidate) {
+  const match = String(candidate || '').match(/-(\d{1,})$/);
+  if (!match) return 0;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function getMaxUserIdIncrement(existingUsersOrIds) {
+  const list = Array.isArray(existingUsersOrIds) ? existingUsersOrIds : [];
+  return list.reduce((max, item) => {
+    const id = typeof item === 'string' ? item : item?.id || item?.legacy_id;
+    const inc = extractIncrement(id);
+    return inc > max ? inc : max;
+  }, 0);
+}

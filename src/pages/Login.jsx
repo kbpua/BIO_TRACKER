@@ -11,6 +11,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [registerForm, setRegisterForm] = useState({
     fullName: '',
     email: '',
@@ -18,25 +19,33 @@ export default function Login() {
     confirmPassword: '',
     role: 'Researcher',
   });
-  const { login } = useAuth();
+  const { login, register, isSupabaseAuth, isHydratingSession } = useAuth();
   const { users, addUser } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/dashboard';
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
-    const result = login(email, password, users);
-    if (result.success) {
-      navigate(from, { replace: true });
-    } else {
-      setError(result.error || 'Login failed.');
+    setSubmitting(true);
+    try {
+      const result = await login(email, password, users);
+      if (result.success) {
+        navigate(from, { replace: true });
+      } else {
+        setError(result.error || 'Login failed.');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err?.message || 'An unexpected error occurred during login.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleRegisterSubmit = (e) => {
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
@@ -55,20 +64,33 @@ export default function Login() {
       return;
     }
     const existing = users.some((u) => u.email?.toLowerCase() === registerForm.email.toLowerCase());
-    if (existing) {
+    if (!isSupabaseAuth && existing) {
       setError('An account with this email already exists.');
       return;
     }
     const isResearcher = registerForm.role === 'Researcher';
-    addUser({
-      fullName: registerForm.fullName,
-      email: registerForm.email,
-      password: registerForm.password,
-      role: registerForm.role,
-      status: isResearcher ? 'Pending' : 'Active',
-      createdBy: 'Self',
-      pendingDaysRemaining: isResearcher ? 2 : undefined,
-    });
+    if (isSupabaseAuth) {
+      const result = await register({
+        fullName: registerForm.fullName,
+        email: registerForm.email,
+        password: registerForm.password,
+        role: registerForm.role,
+      });
+      if (!result.success) {
+        setError(result.error || 'Registration failed.');
+        return;
+      }
+    } else {
+      addUser({
+        fullName: registerForm.fullName,
+        email: registerForm.email,
+        password: registerForm.password,
+        role: registerForm.role,
+        status: isResearcher ? 'Pending' : 'Active',
+        createdBy: 'Self',
+        pendingDaysRemaining: isResearcher ? 2 : undefined,
+      });
+    }
     setRegisterForm({ fullName: '', email: '', password: '', confirmPassword: '', role: 'Researcher' });
     setSuccessMessage(
       isResearcher
@@ -141,9 +163,10 @@ export default function Login() {
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white font-medium rounded-lg hover:opacity-95 transition-opacity"
+                disabled={isHydratingSession || submitting}
+                className="w-full py-2.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white font-medium rounded-lg hover:opacity-95 transition-opacity disabled:opacity-70"
               >
-                Sign in
+                {isHydratingSession ? 'Loading session...' : submitting ? 'Signing in...' : 'Sign in'}
               </button>
             </form>
           ) : (
@@ -235,6 +258,7 @@ export default function Login() {
               </div>
               <button
                 type="submit"
+                disabled={isHydratingSession}
                 className="w-full py-2.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white font-medium rounded-lg hover:opacity-95 transition-opacity"
               >
                 Register
@@ -242,7 +266,7 @@ export default function Login() {
             </form>
           )}
 
-          {mode === 'login' && (
+          {mode === 'login' && !isSupabaseAuth && (
             <p className="mt-4 text-xs text-gray-400 text-center">
               Test: admin@biosample.com / admin123 · researcher@biosample.com / research123 · maria.co@biosample.com / research123 (Dr. Maria Santos — Researcher) · student@biosample.com / student123 · pending@biosample.com / pending123 (pending)
             </p>

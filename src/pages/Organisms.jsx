@@ -146,8 +146,13 @@ export default function Organisms() {
     setModal(null);
   };
 
-  const handleDelete = (id) => {
-    deleteOrganism(id);
+  const handleDelete = async (id) => {
+    const ok = await deleteOrganism(id);
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to delete organism in Supabase. Please check your permissions and try again.');
+      return;
+    }
     setConfirmDelete(null);
   };
 

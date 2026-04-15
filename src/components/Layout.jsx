@@ -122,9 +122,9 @@ export function Layout({ children }) {
     [isAdmin, user?.role]
   );
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   return (

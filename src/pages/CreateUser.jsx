@@ -71,7 +71,7 @@ const ROLE_CARDS = [
 ];
 
 export default function CreateUser() {
-  const { user: currentUser, isAdmin } = useAuth();
+  const { user: currentUser, isAdmin, isSupabaseAuth } = useAuth();
   const navigate = useNavigate();
   const { addUser, users } = useData();
 
@@ -239,6 +239,11 @@ export default function CreateUser() {
           }`}
         >
           {message.text}
+        </div>
+      )}
+      {isSupabaseAuth && (
+        <div className="mb-4 p-3 rounded-lg text-sm bg-amber-50 text-amber-800 border border-amber-200">
+          In Supabase mode, create users through the Register screen so Auth credentials are created correctly.
         </div>
       )}
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-mint-100 shadow-sm p-6 md:p-8 space-y-8">
@@ -476,7 +481,7 @@ export default function CreateUser() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || isSupabaseAuth}
             onClick={() => setSubmitMode('add-another')}
             className="px-4 py-2 rounded-xl border border-mint-300 text-sm font-medium text-mint-700 hover:bg-mint-50 disabled:opacity-60 disabled:cursor-not-allowed"
           >
@@ -485,7 +490,7 @@ export default function CreateUser() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || isSupabaseAuth}
             onClick={() => setSubmitMode('create')}
             className="px-4 py-2 rounded-xl bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-sm font-medium text-white hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-mint-900/20 transition-opacity"
           >

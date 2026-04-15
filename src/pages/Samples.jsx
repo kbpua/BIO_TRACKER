@@ -51,8 +51,13 @@ export default function Samples() {
     setFilterStatus('');
   };
 
-  const handleDelete = (id) => {
-    deleteSample(id);
+  const handleDelete = async (id) => {
+    const ok = await deleteSample(id);
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to delete sample in Supabase. Please check your permissions and try again.');
+      return;
+    }
     setConfirmDelete(null);
   };
 

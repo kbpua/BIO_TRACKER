@@ -266,7 +266,7 @@ export default function Projects() {
     const pub = getProjectPublicationStatus(p);
     const matchPublication = filterPublication === 'All' || pub === filterPublication;
     return matchSearch && matchStatus && matchPublication;
-  }).sort((a, b) => (projectOrder.get(b.id) ?? 0) - (projectOrder.get(a.id) ?? 0));
+  }).sort((a, b) => (projectOrder.get(a.id) ?? 0) - (projectOrder.get(b.id) ?? 0));
 
   const clearFilters = () => {
     setSearch('');
@@ -332,8 +332,13 @@ export default function Projects() {
     (i) => i.status === 'Pending' && i.invitedTo === user?.fullName
   );
 
-  const handleDelete = (id) => {
-    deleteProject(id);
+  const handleDelete = async (id) => {
+    const ok = await deleteProject(id);
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to delete project in Supabase. Please check your permissions and try again.');
+      return;
+    }
     setConfirmDelete(null);
   };
 
