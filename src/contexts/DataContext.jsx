@@ -555,7 +555,17 @@ export function DataProvider({ children }) {
           if (p.id !== approved.projectId) return p;
           const cur = Array.isArray(p.approvedExporters) ? p.approvedExporters : [];
           if (cur.includes(approved.requestedBy)) return p;
-          return { ...p, approvedExporters: [...cur, approved.requestedBy] };
+          const updatedExporters = [...cur, approved.requestedBy];
+          const updated = { ...p, approvedExporters: updatedExporters };
+          if (supabaseEnabled && supabase) {
+            supabase.from('projects')
+              .update({ approved_exporters: updatedExporters })
+              .eq('id', p.id)
+              .then(({ error }) => {
+                if (error) console.error('Failed to persist approved_exporters in Supabase:', error.message);
+              });
+          }
+          return updated;
         })
       );
       return approved;
@@ -573,15 +583,13 @@ export function DataProvider({ children }) {
     if (approved.type === 'add') {
       addSample(approved.proposedSample);
     } else if (approved.type === 'edit') {
-      setSamples((prev) =>
-        prev.map((s) => (s.id === approved.sampleRecordId ? { ...s, ...approved.proposedUpdates } : s))
-      );
+      updateSample(approved.sampleRecordId, approved.proposedUpdates);
     } else if (approved.type === 'delete') {
       deleteSample(approved.sampleRecordId);
     }
 
     return approved;
-  }, [addSample, createCoResearcherInvites, deleteSample, supabaseEnabled]);
+  }, [addSample, updateSample, createCoResearcherInvites, deleteSample, supabaseEnabled]);
 
   const rejectPendingRequest = useCallback((requestId) => {
     let rejected = null;
@@ -610,7 +618,6 @@ export function DataProvider({ children }) {
       const found = prev.find((i) => i.id === inviteId);
       if (!found) return prev;
       invite = found;
-      // remove from list after response (prototype)
       return prev.filter((i) => i.id !== inviteId);
     });
     if (supabaseEnabled && supabase) {
@@ -626,7 +633,16 @@ export function DataProvider({ children }) {
           if (p.id !== invite.projectId) return p;
           const current = Array.isArray(p.coResearchers) ? p.coResearchers : [];
           if (current.includes(invite.invitedTo)) return p;
-          return { ...p, coResearchers: [...current, invite.invitedTo] };
+          const updatedCoResearchers = [...current, invite.invitedTo];
+          if (supabaseEnabled && supabase) {
+            supabase.from('projects')
+              .update({ co_researchers: updatedCoResearchers })
+              .eq('id', invite.projectId)
+              .then(({ error }) => {
+                if (error) console.error('Failed to update co_researchers in Supabase:', error.message);
+              });
+          }
+          return { ...p, coResearchers: updatedCoResearchers };
         })
       );
     }
@@ -733,7 +749,9 @@ export function DataProvider({ children }) {
         });
       }
       if (newId !== id) {
-        supabase.from('samples').update({ organism_id: newId }).eq('organism_id', id);
+        supabase.from('samples').update({ organism_id: newId }).eq('organism_id', id).then(({ error }) => {
+          if (error) console.error('Failed to update sample organism references in Supabase:', error.message);
+        });
       }
     }
   }, [supabaseEnabled]);
@@ -758,15 +776,11 @@ export function DataProvider({ children }) {
     return true;
   }, [supabaseEnabled]);
 
-  const updateUser = useCallback((id, updates) => {
-    let targetAuthId = null;
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id !== id) return u;
-        targetAuthId = u.authId || u.id;
-        return { ...u, ...updates };
-      })
-    );
+  const updateUser = useCallback(async (id, updates) => {
+    const target = users.find((u) => u.id === id);
+    if (!target) return false;
+    const targetAuthId = target.authId || target.id;
+
     if (supabaseEnabled && supabase && targetAuthId) {
       const profileUpdates = {};
       if (updates.fullName !== undefined) profileUpdates.full_name = updates.fullName;
@@ -774,16 +788,22 @@ export function DataProvider({ children }) {
       if (updates.status !== undefined) profileUpdates.status = updates.status;
       if (updates.createdBy !== undefined) profileUpdates.created_by = updates.createdBy;
       if (updates.pendingDaysRemaining !== undefined) profileUpdates.pending_days_remaining = updates.pendingDaysRemaining;
-      if (Object.keys(profileUpdates).length === 0) return;
-      supabase
+      if (Object.keys(profileUpdates).length === 0) return true;
+      const { error } = await supabase
         .from('profiles')
         .update(profileUpdates)
-        .eq('id', targetAuthId)
-        .then(({ error }) => {
-          if (error) console.error('Failed to update user profile in Supabase:', error.message);
-        });
+        .eq('id', targetAuthId);
+      if (error) {
+        console.error(`Failed to update user profile in Supabase (user ${id}):`, error.message);
+        return false;
+      }
     }
-  }, [supabaseEnabled]);
+
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
+    );
+    return true;
+  }, [supabaseEnabled, users]);
 
   const addUser = useCallback((userData) => {
     if (supabaseEnabled && supabase) {

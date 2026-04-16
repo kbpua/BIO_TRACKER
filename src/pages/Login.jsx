@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,29 @@ function FieldErrorPopup({ message, onClose }) {
   );
 }
 
+function GoogleLogo() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M23.49 12.27c0-.79-.07-1.55-.2-2.27H12v4.29h6.45a5.5 5.5 0 0 1-2.39 3.61v3h3.87c2.26-2.09 3.56-5.16 3.56-8.63z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.87-3a7.2 7.2 0 0 1-10.72-3.78H1.36v3.09A12 12 0 0 0 12 24z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.36 14.31A7.2 7.2 0 0 1 4.96 12c0-.8.14-1.57.4-2.31V6.6H1.36A12 12 0 0 0 0 12c0 1.93.46 3.75 1.36 5.4l4-3.09z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.77c1.76 0 3.34.61 4.58 1.8l3.44-3.44C17.96 1.19 15.24 0 12 0A12 12 0 0 0 1.36 6.6l4 3.09A7.2 7.2 0 0 1 12 4.77z"
+      />
+    </svg>
+  );
+}
+
 export default function Login() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
@@ -49,11 +72,22 @@ export default function Login() {
     confirmPassword: '',
     role: 'Researcher',
   });
-  const { login, register, isSupabaseAuth, isHydratingSession } = useAuth();
+  const { login, loginWithGoogle, register, isSupabaseAuth, isHydratingSession, authBlockedMessage, clearAuthBlockedMessage } = useAuth();
   const { users, addUser } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/dashboard';
+
+  const [processingOAuth, setProcessingOAuth] = useState(() => {
+    const hash = window.location.hash || '';
+    return hash.includes('access_token') || hash.includes('refresh_token');
+  });
+
+  useEffect(() => {
+    if (!processingOAuth) return;
+    const timeout = setTimeout(() => setProcessingOAuth(false), 6000);
+    return () => clearTimeout(timeout);
+  }, [processingOAuth]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -151,6 +185,36 @@ export default function Login() {
     );
   };
 
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setSuccessMessage('');
+    setSubmitting(true);
+    try {
+      const result = await loginWithGoogle();
+      if (!result.success) {
+        setError(result.error || 'Google sign-in failed.');
+      }
+    } catch (err) {
+      console.error('Google sign-in error:', err);
+      setError(err?.message || 'An unexpected error occurred during Google sign-in.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (processingOAuth || isHydratingSession) {
+    return (
+      <div className="min-h-screen bg-mint-50 flex items-center justify-center p-6 font-sans">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-lg border border-mint-100 p-8 text-center">
+            <h1 className="text-2xl font-bold text-mint-800 mb-2">BioSample Tracker</h1>
+            <p className="text-gray-500 text-sm">Signing you in with Google...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-mint-50 flex items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md">
@@ -162,17 +226,34 @@ export default function Login() {
             {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
           </p>
 
+          {authBlockedMessage && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200 flex items-start gap-2">
+              <svg className="h-5 w-5 shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-medium">Account pending approval</p>
+                <p className="mt-0.5">{authBlockedMessage}</p>
+              </div>
+              <button type="button" onClick={clearAuthBlockedMessage} className="shrink-0 text-amber-400 hover:text-amber-600" aria-label="Dismiss">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <div className="flex rounded-lg border border-mint-200 p-0.5 mb-6 bg-mint-50">
             <button
               type="button"
-              onClick={() => { setMode('login'); setError(''); setSuccessMessage(''); }}
+              onClick={() => { setMode('login'); setError(''); setSuccessMessage(''); clearAuthBlockedMessage(); }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'login' ? 'bg-white text-mint-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Login
             </button>
             <button
               type="button"
-              onClick={() => { setMode('register'); setError(''); setSuccessMessage(''); }}
+              onClick={() => { setMode('register'); setError(''); setSuccessMessage(''); clearAuthBlockedMessage(); }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'register' ? 'bg-white text-mint-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Register
@@ -230,6 +311,24 @@ export default function Login() {
               >
                 {isHydratingSession ? 'Loading session...' : submitting ? 'Signing in...' : 'Sign in'}
               </button>
+              {isSupabaseAuth && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs text-gray-400">OR</span>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={isHydratingSession || submitting}
+                    className="w-full py-2.5 bg-white text-gray-700 border border-gray-300 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+                  >
+                    <GoogleLogo />
+                    Sign in with Google
+                  </button>
+                </>
+              )}
             </form>
           ) : (
             <form onSubmit={handleRegisterSubmit} className="space-y-4" noValidate>
@@ -371,6 +470,24 @@ export default function Login() {
               >
                 Register
               </button>
+              {isSupabaseAuth && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs text-gray-400">OR</span>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={isHydratingSession || submitting}
+                    className="w-full py-2.5 bg-white text-gray-700 border border-gray-300 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+                  >
+                    <GoogleLogo />
+                    Sign up with Google
+                  </button>
+                </>
+              )}
             </form>
           )}
 

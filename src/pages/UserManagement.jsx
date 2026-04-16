@@ -8,22 +8,40 @@ import { ROLES } from '../data/mockData';
 export default function UserManagement() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const { users, updateUser, deleteUser } = useData();
+  const { users, updateUser, deleteUser, addActivity } = useData();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [viewUserId, setViewUserId] = useState(null);
 
   const pending = users.filter((u) => u.status === 'Pending');
 
-  const handleApprove = (id) => {
-    updateUser(id, { status: 'Active' });
+  const handleApprove = async (id) => {
+    const target = users.find((u) => u.id === id);
+    const ok = await updateUser(id, { status: 'Active', pendingDaysRemaining: undefined });
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to approve user in Supabase. Please check your permissions and try again.');
+      return;
+    }
+    addActivity(`${currentUser?.fullName} approved account for ${target?.fullName || id}`);
   };
 
-  const handleRoleChange = (id, role) => {
-    updateUser(id, { role });
+  const handleRoleChange = async (id, role) => {
+    const ok = await updateUser(id, { role });
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to update user role in Supabase. Please try again.');
+    }
   };
 
-  const handleDeactivate = (id) => {
-    updateUser(id, { status: 'Deactivated' });
+  const handleDeactivate = async (id) => {
+    const target = users.find((u) => u.id === id);
+    const ok = await updateUser(id, { status: 'Deactivated' });
+    if (!ok) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to deactivate user in Supabase. Please try again.');
+      return;
+    }
+    addActivity(`${currentUser?.fullName} deactivated account for ${target?.fullName || id}`);
   };
 
   const handleDelete = async (id) => {

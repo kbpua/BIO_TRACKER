@@ -8,6 +8,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const supabaseEnabled = isSupabaseConfigured();
   const [isHydratingSession, setIsHydratingSession] = useState(supabaseEnabled);
+  const [authBlockedMessage, setAuthBlockedMessage] = useState('');
   const [user, setUser] = useState(() => {
     if (supabaseEnabled) return null;
     try {
@@ -29,6 +30,60 @@ export function AuthProvider({ children }) {
     pendingDaysRemaining: profile?.pending_days_remaining ?? undefined,
   }), []);
 
+  const ensureProfileForSessionUser = useCallback(async (sessionUser) => {
+    if (!supabaseEnabled || !supabase || !sessionUser?.id) return null;
+
+    let { data: profile } = await supabase
+      .from('profiles')
+      .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
+      .eq('id', sessionUser.id)
+      .maybeSingle();
+
+    if (!profile && sessionUser.email) {
+      const fallback = await supabase
+        .from('profiles')
+        .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
+        .eq('email', sessionUser.email)
+        .maybeSingle();
+      profile = fallback.data;
+    }
+
+    if (profile) return profile;
+
+    // Auto-provision profile for first-time OAuth users.
+    const displayName =
+      sessionUser.user_metadata?.full_name ||
+      sessionUser.user_metadata?.name ||
+      sessionUser.email ||
+      'Unknown User';
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('profiles')
+      .insert({
+        id: sessionUser.id,
+        email: sessionUser.email || '',
+        full_name: displayName,
+        role: 'Student',
+        status: 'Active',
+        created_by: 'Self',
+      })
+      .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
+      .single();
+
+    if (insertError) {
+      console.error('Failed to auto-provision profile for OAuth user:', insertError.message);
+      // Profile may have been created by a database trigger in the meantime — retry fetch.
+      const { data: retryProfile } = await supabase
+        .from('profiles')
+        .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
+        .eq('id', sessionUser.id)
+        .maybeSingle();
+      return retryProfile || null;
+    }
+
+    return inserted || null;
+  }, [supabaseEnabled]);
+
   useEffect(() => {
     if (!supabaseEnabled || !supabase) return undefined;
 
@@ -46,26 +101,41 @@ export function AuthProvider({ children }) {
         return;
       }
       try {
-        let { data: profile } = await supabase
-          .from('profiles')
-          .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
-          .eq('id', sessionUser.id)
-          .maybeSingle();
-        if (!profile && sessionUser.email) {
-          const fallback = await supabase
-            .from('profiles')
-            .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
-            .eq('email', sessionUser.email)
-            .maybeSingle();
-          profile = fallback.data;
-        }
+        const profile = await ensureProfileForSessionUser(sessionUser);
         if (profile?.status === 'Pending' || profile?.status === 'Deactivated') {
-          // Never keep a blocked account signed in from a persisted session.
           try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
-          if (!cancelled) setUser(null);
+          if (!cancelled) {
+            setUser(null);
+            if (profile.status === 'Pending') {
+              setAuthBlockedMessage('Your account is awaiting admin approval. You will be able to sign in once an administrator activates your account.');
+            } else {
+              setAuthBlockedMessage('Your account has been deactivated. Please contact your administrator.');
+            }
+          }
           return;
         }
-        if (!cancelled) setUser(profile ? mapProfileUser(profile, sessionUser.email || '') : null);
+        if (profile) {
+          if (!cancelled) setUser(mapProfileUser(profile, sessionUser.email || ''));
+        } else {
+          // Profile could not be fetched or created (e.g. RLS blocks insert
+          // and no DB trigger exists). Build a minimal user from session
+          // metadata so the OAuth user is not silently locked out.
+          const fallbackName =
+            sessionUser.user_metadata?.full_name ||
+            sessionUser.user_metadata?.name ||
+            sessionUser.email ||
+            'Unknown User';
+          if (!cancelled) setUser({
+            id: sessionUser.id,
+            authId: sessionUser.id,
+            email: sessionUser.email || '',
+            fullName: fallbackName,
+            role: 'Student',
+            status: 'Active',
+            dateCreated: '',
+            createdBy: 'Self',
+          });
+        }
       } catch (error) {
         console.error('Failed to load Supabase profile:', error);
         if (!cancelled) setUser(null);
@@ -76,8 +146,16 @@ export function AuthProvider({ children }) {
 
     const hydrateSession = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        await loadProfileUser(data?.session?.user || null);
+        // If the URL contains an OAuth hash fragment, let onAuthStateChange
+        // handle session creation instead of reading a stale (empty) session.
+        const hasOAuthHash =
+          window.location.hash &&
+          (window.location.hash.includes('access_token') || window.location.hash.includes('error'));
+
+        if (!hasOAuthHash) {
+          const { data } = await supabase.auth.getSession();
+          await loadProfileUser(data?.session?.user || null);
+        }
       } catch (error) {
         console.error('Failed to hydrate Supabase session:', error);
         if (!cancelled) {
@@ -95,8 +173,6 @@ export function AuthProvider({ children }) {
     hydrateSession();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Fire-and-forget: never hold the auth lock with an awaited promise,
-      // otherwise subsequent signInWithPassword calls will deadlock.
       loadProfileUser(session?.user || null);
     });
 
@@ -105,7 +181,7 @@ export function AuthProvider({ children }) {
       if (timeoutId) clearTimeout(timeoutId);
       sub?.subscription?.unsubscribe();
     };
-  }, [supabaseEnabled, mapProfileUser]);
+  }, [supabaseEnabled, mapProfileUser, ensureProfileForSessionUser]);
 
   const login = useCallback(async (email, password, dataUsers = []) => {
     if (supabaseEnabled && supabase) {
@@ -229,6 +305,24 @@ export function AuthProvider({ children }) {
     return { success: false, error: 'Supabase is not configured.' };
   }, [supabaseEnabled]);
 
+  const loginWithGoogle = useCallback(async () => {
+    if (!supabaseEnabled || !supabase) {
+      return { success: false, error: 'Google sign-in requires Supabase configuration.' };
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/login`,
+      },
+    });
+
+    if (error) {
+      return { success: false, error: error.message || 'Google sign-in failed.' };
+    }
+    return { success: true };
+  }, [supabaseEnabled]);
+
   const logout = useCallback(async () => {
     if (supabaseEnabled && supabase) {
       try {
@@ -253,13 +347,18 @@ export function AuthProvider({ children }) {
   const canManageProjects = isAdmin;
   const canManageOrganisms = isAdmin;
   const canManageUsers = isAdmin;
+  const clearAuthBlockedMessage = useCallback(() => setAuthBlockedMessage(''), []);
+
   const value = {
     user,
     login,
+    loginWithGoogle,
     register,
     logout,
     isHydratingSession,
     isSupabaseAuth: supabaseEnabled,
+    authBlockedMessage,
+    clearAuthBlockedMessage,
     isAdmin,
     isResearcher,
     isStudent,

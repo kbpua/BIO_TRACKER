@@ -191,19 +191,20 @@ export default function ProjectDetail() {
       const msg = summary
         ? `Edit request approved for ${approved.sampleId}. ${summary}`
         : `Edit request approved. Sample ${approved.sampleId} has been updated.`;
-      // Show immediately for approver (admin/lead)
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
-      // Also queue for the requester to see later when they come back.
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+      addActivity(`${user?.fullName} approved edit request for sample ${approved.sampleId} (requested by ${approved.requestedBy})`);
     } else if (approved.type === 'delete') {
       const reason = approved.reason ? ` Reason: ${approved.reason}` : '';
       const msg = `Delete request approved. Sample ${approved.sampleId} has been removed.${reason}`;
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+      addActivity(`${user?.fullName} approved delete request for sample ${approved.sampleId} (requested by ${approved.requestedBy})`);
     } else if (approved.type === 'export') {
       const msg = `Export request approved. ${approved.requestedBy} can now export their samples from this project.`;
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+      addActivity(`${user?.fullName} approved export request for project ${project?.name || approved.projectId} (requested by ${approved.requestedBy})`);
     } else if (approved.type === 'coResearcherInvite') {
       const invitees = Array.isArray(approved.proposedUpdates?.invitedToList) ? approved.proposedUpdates.invitedToList : [];
       const requesterMsg = invitees.length > 0
@@ -214,11 +215,13 @@ export default function ProjectDetail() {
         : 'Co-researcher invite request approved.';
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
+      addActivity(`${user?.fullName} approved co-researcher invite request for project ${project?.name || approved.projectId} (invitees: ${invitees.join(', ')})`);
     } else {
       const type = approved.proposedSample?.sampleType ? ` (${approved.proposedSample.sampleType})` : '';
       const msg = `Add request approved. Sample ${approved.sampleId}${type} has been added.`;
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
+      addActivity(`${user?.fullName} approved add request for sample ${approved.sampleId} (requested by ${approved.requestedBy})`);
     }
   };
 
@@ -228,6 +231,7 @@ export default function ProjectDetail() {
     if (rejected.type === 'export') {
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: 'Export request rejected.', variant: 'error' } })); } catch {}
       enqueueToastForUser(rejected.requestedBy, { message: 'Export request rejected.', variant: 'error' });
+      addActivity(`${user?.fullName} rejected export request for project ${project?.name || rejected.projectId} (requested by ${rejected.requestedBy})`);
       return;
     }
     if (rejected.type === 'coResearcherInvite') {
@@ -240,6 +244,7 @@ export default function ProjectDetail() {
         : 'Co-researcher invite request declined.';
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch {}
       enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
+      addActivity(`${user?.fullName} rejected co-researcher invite request for project ${project?.name || rejected.projectId}`);
       return;
     }
     const kind = rejected.type === 'edit' ? 'Edit' : rejected.type === 'delete' ? 'Delete' : 'Add';
@@ -253,6 +258,7 @@ export default function ProjectDetail() {
       : `${kind} request rejected for ${rejected.sampleId}. No changes have been made.`;
     try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
     enqueueToastForUser(rejected.requestedBy, { message: msg, variant: 'error' });
+    addActivity(`${user?.fullName} rejected ${kind.toLowerCase()} request for sample ${rejected.sampleId} (requested by ${rejected.requestedBy})`);
   };
 
   const handleRequestDelete = (sampleRow) => {

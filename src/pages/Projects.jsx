@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { PROJECT_STATUSES } from '../data/mockData';
 import { generateProjectId } from '../utils/projectId';
 import { PUBLICATION_STATUSES, canUserViewProject, getVisibleSamples, getProjectPublicationStatus } from '../utils/visibility';
@@ -10,6 +11,22 @@ import { ViewIconLink, EditIconButton, DeleteIconButton } from '../components/Ta
 
 function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEditLeadResearcher }) {
   const { users, projects } = useData();
+  const [sbProfiles, setSbProfiles] = useState([]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !supabase) return;
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('full_name, role, status')
+      .in('role', ['Researcher', 'Admin'])
+      .eq('status', 'Active')
+      .then(({ data }) => {
+        if (!cancelled && data) setSbProfiles(data);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const activeResearchers = (users || []).filter(
     (u) => u.role === 'Researcher' && u.status === 'Active'
   );
@@ -56,12 +73,16 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
   }, [project?.id, isEdit]);
 
   const availableCoResearchers = useMemo(() => {
-    const list = (users || [])
+    const fromContext = (users || [])
       .filter((u) => u.status === 'Active' && (u.role === 'Researcher' || u.role === 'Admin'))
       .map((u) => u.fullName)
       .filter(Boolean);
-    return [...new Set(list)].filter((name) => name !== form.leadResearcher);
-  }, [users, form.leadResearcher]);
+    const fromSb = sbProfiles
+      .map((p) => p.full_name)
+      .filter(Boolean);
+    const merged = [...new Set([...fromContext, ...fromSb])];
+    return merged.filter((name) => name !== form.leadResearcher);
+  }, [users, sbProfiles, form.leadResearcher]);
 
   useEffect(() => {
     setForm((f) => ({
@@ -244,6 +265,7 @@ export default function Projects() {
     rejectPendingRequest,
     coResearcherInvites,
     respondToCoResearcherInvite,
+    addActivity,
   } = useData();
 
   const canEditProject = (p) =>
@@ -394,6 +416,7 @@ export default function Projects() {
       : `Admin approved your co-researcher request for ${proj?.name || approved.projectId}.`;
     try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch {}
     enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
+    addActivity(`${user?.fullName} approved co-researcher invite request for ${proj?.name || approved.projectId} (invitees: ${invitees.join(', ')})`);
   };
 
   const handleRejectCoResearcherRequest = (req) => {
@@ -409,6 +432,7 @@ export default function Projects() {
       : `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}.`;
     try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch {}
     enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
+    addActivity(`${user?.fullName} rejected co-researcher invite request for ${proj?.name || rejected.projectId}`);
   };
 
   const handleDelete = async (id) => {
@@ -464,6 +488,7 @@ export default function Projects() {
                           ? `Invitation accepted. You are now a Co-Researcher on ${proj?.name || inv.projectId}.`
                           : 'Invitation accepted.';
                         try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+                        addActivity(`${user?.fullName} accepted co-researcher invite for project ${proj?.name || inv.projectId}`);
                       }}
                       className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
                     >
@@ -477,6 +502,7 @@ export default function Projects() {
                           ? `Invitation declined for ${proj?.name || inv.projectId}.`
                           : 'Invitation declined.';
                         try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
+                        addActivity(`${user?.fullName} declined co-researcher invite for project ${proj?.name || inv.projectId}`);
                       }}
                       className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
                     >
