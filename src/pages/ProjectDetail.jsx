@@ -1,8 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { canUserChangeProjectPublication, canUserViewProject, getProjectPublicationStatus } from '../utils/visibility';
+import { displayNamesEqual, isPendingCoResearcherInviteForUser } from '../utils/personName';
 import { exportSamplesCSV } from '../utils/export';
 import {
   ViewIconLink,
@@ -26,6 +30,7 @@ export default function ProjectDetail() {
     projects,
     samples,
     organisms,
+    users,
     deleteSample,
     addActivity,
     updateProject,
@@ -34,6 +39,11 @@ export default function ProjectDetail() {
     rejectPendingRequest,
     submitDeleteRequest,
     submitExportRequest,
+    coResearcherInvites,
+    respondToCoResearcherInvite,
+    sendCoResearcherInvites,
+    submitCoResearcherInviteRequest,
+    refreshInvitesAndRequests,
   } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -41,13 +51,31 @@ export default function ProjectDetail() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmPublication, setConfirmPublication] = useState(null);
   const [confirmRequestDelete, setConfirmRequestDelete] = useState(null);
+  const [coInviteModalOpen, setCoInviteModalOpen] = useState(false);
+  const [coInviteSelection, setCoInviteSelection] = useState(() => new Set());
+  const [sbInviteProfiles, setSbInviteProfiles] = useState([]);
+
+  useEffect(() => {
+    if (!coInviteModalOpen || !isSupabaseConfigured() || !supabase) return;
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('full_name, role, status')
+      .in('role', ['Researcher', 'Admin'])
+      .eq('status', 'Active')
+      .then(({ data }) => {
+        if (!cancelled && data) setSbInviteProfiles(data);
+      });
+    return () => { cancelled = true; };
+  }, [coInviteModalOpen]);
 
   const project = projects.find((p) => p.id === id);
   const getOrgName = (oid) => organisms.find((o) => o.id === oid)?.scientificName ?? '';
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
 
-  const isLeadResearcher = isResearcher && project?.leadResearcher === user?.fullName;
-  const isCoResearcher = isResearcher && Array.isArray(project?.coResearchers) && project.coResearchers.includes(user?.fullName);
+  const isLeadResearcher = isResearcher && displayNamesEqual(project?.leadResearcher, user?.fullName);
+  const isCoResearcher = isResearcher && Array.isArray(project?.coResearchers)
+    && project.coResearchers.some((n) => displayNamesEqual(n, user?.fullName));
   const canAddSample = isAdmin || isLeadResearcher || isCoResearcher;
 
   const canExportFromProjectPage = isAdmin || (isResearcher && (isLeadResearcher || isCoResearcher));
@@ -163,6 +191,200 @@ export default function ProjectDetail() {
     if (!project) return [];
     return (pendingRequests || []).filter((r) => r.projectId === project.id);
   }, [pendingRequests, project]);
+
+  const pendingForProjectQueue = useMemo(
+    () => pendingForProject.filter(
+      (r) => !(r.type === 'coResearcherInvite' && r.resolution)
+    ),
+    [pendingForProject]
+  );
+
+  const pendingCoResearcherInvitesForProject = useMemo(() => {
+    if (!project) return [];
+    return (coResearcherInvites || []).filter(
+      (inv) => inv.projectId === project.id && String(inv.status).toLowerCase() === 'pending'
+    );
+  }, [coResearcherInvites, project]);
+
+  const canInviteCoResearchers = isAdmin || isLeadResearcher;
+
+  const inviteableCoResearcherNames = useMemo(() => {
+    if (!project) return [];
+    const lead = project.leadResearcher;
+    const team = Array.isArray(project.coResearchers) ? project.coResearchers : [];
+    const fromContext = (users || [])
+      .filter((u) => u.status === 'Active' && (u.role === 'Researcher' || u.role === 'Admin'))
+      .map((u) => u.fullName)
+      .filter(Boolean);
+    const fromSb = (sbInviteProfiles || []).map((p) => p.full_name).filter(Boolean);
+    const merged = [...new Set([...fromContext, ...fromSb])];
+    return merged.filter((name) => {
+      if (!name || displayNamesEqual(name, lead)) return false;
+      if (team.some((t) => displayNamesEqual(t, name))) return false;
+      if (pendingCoResearcherInvitesForProject.some((inv) => displayNamesEqual(inv.invitedTo, name))) return false;
+      return true;
+    }).sort((a, b) => a.localeCompare(b));
+  }, [project, users, sbInviteProfiles, pendingCoResearcherInvitesForProject]);
+
+  useEffect(() => {
+    if (coInviteModalOpen) setCoInviteSelection(new Set());
+  }, [coInviteModalOpen]);
+
+  const handleSubmitCoResearcherInvites = async () => {
+    if (!project) return;
+    const chosen = [...coInviteSelection].filter(Boolean);
+    if (chosen.length === 0) {
+      try {
+        window.dispatchEvent(new CustomEvent('biosample_flash', {
+          detail: { message: 'Select at least one person to invite.', variant: 'error' },
+        }));
+      } catch {}
+      return;
+    }
+
+    const adminSelf = isAdmin && user?.fullName ? user.fullName : null;
+    const selfAdded = adminSelf ? chosen.some((n) => displayNamesEqual(n, adminSelf)) : false;
+    const inviteAdded = selfAdded ? chosen.filter((n) => !displayNamesEqual(n, adminSelf)) : chosen;
+
+    if (inviteAdded.length === 0 && !(selfAdded && adminSelf)) {
+      try {
+        window.dispatchEvent(new CustomEvent('biosample_flash', {
+          detail: { message: 'Select at least one person to invite.', variant: 'error' },
+        }));
+      } catch {}
+      return;
+    }
+
+    let shouldCloseModal = true;
+
+    if (inviteAdded.length > 0) {
+      if (isAdmin) {
+        sendCoResearcherInvites({
+          projectId: project.id,
+          invitedBy: user?.fullName || 'Unknown',
+          invitedToList: inviteAdded,
+        });
+        const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${project.name}: ${inviteAdded.join(', ')}`;
+        try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+        addActivity(`${user?.fullName} set up co-researcher invite(s) for ${project.name}: ${inviteAdded.join(', ')}`);
+      } else {
+        const created = await submitCoResearcherInviteRequest({
+          projectId: project.id,
+          requestedBy: user?.fullName || 'Unknown',
+          invitedToList: inviteAdded,
+        });
+        if (!created) {
+          shouldCloseModal = false;
+          try {
+            window.dispatchEvent(new CustomEvent('biosample_flash', {
+              detail: {
+                message: 'A matching co-researcher invite request is already pending admin approval.',
+                variant: 'error',
+              },
+            }));
+          } catch {}
+        } else {
+          const msg = `Your request to add co-researcher${inviteAdded.length > 1 ? 's' : ''} (${inviteAdded.join(', ')}) was sent to Admin for approval.`;
+          try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+          addActivity(`${user?.fullName} set up co-researcher invite(s) for ${project.name}: ${inviteAdded.join(', ')}`);
+        }
+      }
+    }
+
+    if (selfAdded && adminSelf) {
+      const prevCo = Array.isArray(project.coResearchers) ? project.coResearchers : [];
+      if (!prevCo.some((n) => displayNamesEqual(n, adminSelf))) {
+        updateProject(project.id, { coResearchers: [...prevCo, adminSelf] });
+        if (inviteAdded.length === 0) {
+          addActivity(`${user?.fullName} added themselves as a co-researcher on ${project.name}`);
+          try {
+            window.dispatchEvent(new CustomEvent('biosample_flash', {
+              detail: { message: `You were added as a co-researcher on ${project.name}.`, variant: 'success' },
+            }));
+          } catch {}
+        }
+      }
+    }
+
+    if (shouldCloseModal) setCoInviteModalOpen(false);
+    void refreshInvitesAndRequests();
+  };
+
+  const myCoResearcherInviteAwaitingAdmin = useMemo(() => {
+    if (!project) return null;
+    return (pendingRequests || []).find(
+      (r) =>
+        r.projectId === project.id
+        && r.type === 'coResearcherInvite'
+        && !r.resolution
+        && (
+          (user?.authId && r.requestedByUserId && r.requestedByUserId === user.authId)
+          || displayNamesEqual(r.requestedBy, user?.fullName)
+        )
+    ) || null;
+  }, [pendingRequests, project, user?.authId, user?.fullName]);
+
+  const myResolvedCoResearcherInviteRequest = useMemo(() => {
+    if (!project) return null;
+    return (pendingRequests || []).find(
+      (r) =>
+        r.projectId === project.id
+        && r.type === 'coResearcherInvite'
+        && r.resolution
+        && (
+          (user?.authId && r.requestedByUserId && r.requestedByUserId === user.authId)
+          || displayNamesEqual(r.requestedBy, user?.fullName)
+        )
+    ) || null;
+  }, [pendingRequests, project, user?.authId, user?.fullName]);
+
+  const myPendingCoResearcherInvite = useMemo(() => {
+    if (!project || !user) return null;
+    return (coResearcherInvites || []).find(
+      (inv) =>
+        inv.projectId === project.id
+        && String(inv.status ?? '').toLowerCase() === 'pending'
+        && isPendingCoResearcherInviteForUser(inv, user)
+    ) || null;
+  }, [coResearcherInvites, project, user]);
+
+  const canApproveOrRejectRequest = (req) => {
+    if (req.type === 'coResearcherInvite') {
+      if (!isAdmin) return false;
+      const requestedByMe = (user?.authId && req.requestedByUserId && req.requestedByUserId === user.authId)
+        || displayNamesEqual(req.requestedBy, user?.fullName);
+      return !requestedByMe;
+    }
+    return canSeePendingQueue;
+  };
+
+  const canSeeOutgoingCoResearcherInvites =
+    isAdmin
+    || isLeadResearcher
+    || (isResearcher && pendingCoResearcherInvitesForProject.some((inv) =>
+      displayNamesEqual(inv.invitedBy, user?.fullName)));
+
+  useEffect(() => {
+    if (!id) return;
+    void refreshInvitesAndRequests();
+    const intervalMs = 8000;
+    const intervalId = window.setInterval(() => {
+      void refreshInvitesAndRequests();
+    }, intervalMs);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshInvitesAndRequests();
+    };
+    const onFocus = () => {
+      void refreshInvitesAndRequests();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [id, refreshInvitesAndRequests]);
 
   const enqueueToastForUser = (fullName, payload) => {
     if (!fullName) return;
@@ -285,7 +507,7 @@ export default function ProjectDetail() {
     );
   }
 
-  if (!canUserViewProject(user, project)) {
+  if (!canUserViewProject(user, project, coResearcherInvites)) {
     return (
       <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
         <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
@@ -309,27 +531,39 @@ export default function ProjectDetail() {
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-6">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <h1 className="text-xl font-bold text-gray-800">Project Details</h1>
-          {canChangePublication && (
-            <div className="flex flex-wrap gap-2">
-              {pubStatus === 'Draft' ? (
-                <button
-                  type="button"
-                  onClick={() => setConfirmPublication('publish')}
-                  className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
-                >
-                  Publish Project
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmPublication('unpublish')}
-                  className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700"
-                >
-                  Unpublish Project
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canInviteCoResearchers && (
+              <button
+                type="button"
+                onClick={() => setCoInviteModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-mint-200 bg-mint-50/80 text-mint-900 text-sm font-medium rounded-lg hover:bg-mint-100 transition-colors"
+              >
+                <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
+                Invite co-researchers
+              </button>
+            )}
+            {canChangePublication && (
+              <>
+                {pubStatus === 'Draft' ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmPublication('publish')}
+                    className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
+                  >
+                    Publish Project
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmPublication('unpublish')}
+                    className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700"
+                  >
+                    Unpublish Project
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div><dt className="text-gray-500">Project ID</dt><dd className="font-medium">{project.id}</dd></div>
@@ -347,19 +581,170 @@ export default function ProjectDetail() {
         </dl>
       </div>
 
+      {myCoResearcherInviteAwaitingAdmin && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl shadow-sm p-4 space-y-2">
+          <h2 className="font-semibold text-amber-950">Awaiting admin approval</h2>
+          <p className="text-sm text-amber-900">
+            Your request to invite{' '}
+            <span className="font-medium">
+              {(Array.isArray(myCoResearcherInviteAwaitingAdmin.proposedUpdates?.invitedToList)
+                ? myCoResearcherInviteAwaitingAdmin.proposedUpdates.invitedToList.join(', ')
+                : 'co-researchers')}
+            </span>{' '}
+            is pending review by an administrator. You will get a notification when it is approved or declined.
+          </p>
+          <p className="text-xs text-amber-800/90">
+            Submitted {myCoResearcherInviteAwaitingAdmin.submittedAt
+              ? new Date(myCoResearcherInviteAwaitingAdmin.submittedAt).toLocaleString()
+              : '—'}
+          </p>
+        </div>
+      )}
+
+      {myResolvedCoResearcherInviteRequest && (
+        <div
+          className={`rounded-xl shadow-sm p-4 space-y-2 border ${
+            myResolvedCoResearcherInviteRequest.resolution === 'approved'
+              ? 'bg-emerald-50 border-emerald-200'
+              : 'bg-red-50 border-red-200'
+          }`}
+        >
+          <h2
+            className={`font-semibold ${
+              myResolvedCoResearcherInviteRequest.resolution === 'approved' ? 'text-emerald-950' : 'text-red-950'
+            }`}
+          >
+            {myResolvedCoResearcherInviteRequest.resolution === 'approved'
+              ? 'Admin approved your co-researcher request'
+              : 'Admin declined your co-researcher request'}
+          </h2>
+          <p
+            className={`text-sm ${
+              myResolvedCoResearcherInviteRequest.resolution === 'approved' ? 'text-emerald-900' : 'text-red-900'
+            }`}
+          >
+            Invitees:{' '}
+            <span className="font-medium">
+              {(Array.isArray(myResolvedCoResearcherInviteRequest.proposedUpdates?.invitedToList)
+                ? myResolvedCoResearcherInviteRequest.proposedUpdates.invitedToList.join(', ')
+                : '—')}
+            </span>
+            {myResolvedCoResearcherInviteRequest.resolution === 'approved'
+              ? '. Invitations were sent; each researcher can accept or decline here on the project or on their Projects page.'
+              : '. No invitations were sent.'}
+          </p>
+          {myResolvedCoResearcherInviteRequest.resolvedAt && (
+            <p
+              className={`text-xs ${
+                myResolvedCoResearcherInviteRequest.resolution === 'approved'
+                  ? 'text-emerald-800/90'
+                  : 'text-red-800/90'
+              }`}
+            >
+              Resolved {new Date(myResolvedCoResearcherInviteRequest.resolvedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
+      )}
+
+      {canSeeOutgoingCoResearcherInvites && (
+        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-gray-800">Pending co-researcher invitations</h2>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+              {pendingCoResearcherInvitesForProject.length} pending
+            </span>
+          </div>
+          {pendingCoResearcherInvitesForProject.length === 0 ? (
+            <p className="text-sm text-gray-500">No outstanding invites for this project.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {pendingCoResearcherInvitesForProject.map((inv) => (
+                <li
+                  key={inv.id}
+                  className="flex flex-wrap items-center justify-between gap-2 border border-gray-200 rounded-lg px-3 py-2"
+                >
+                  <span className="font-medium text-gray-800">{inv.invitedTo}</span>
+                  <span className="text-xs text-gray-500">
+                    Invited by {inv.invitedBy} · {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-gray-500">
+            Invited researchers accept or decline on this project page or under Co-Researcher Invitations on Projects.
+          </p>
+        </div>
+      )}
+
+      {myPendingCoResearcherInvite && (
+        <div className="bg-mint-50 border border-mint-200 rounded-xl shadow-sm p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-mint-950">Co-researcher invitation</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Pending your response</span>
+          </div>
+          <p className="text-sm text-mint-900">
+            <span className="font-medium">{myPendingCoResearcherInvite.invitedBy}</span> invited you to collaborate on this project as a co-researcher.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await respondToCoResearcherInvite(myPendingCoResearcherInvite.id, 'Accepted');
+                if (!res) {
+                  try {
+                    window.dispatchEvent(new CustomEvent('biosample_flash', {
+                      detail: { message: 'Could not accept the invitation. Please try again.', variant: 'error' },
+                    }));
+                  } catch {}
+                  return;
+                }
+                const msg = `Invitation accepted. You are now a co-researcher on ${project.name}.`;
+                try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+                addActivity(`${user?.fullName} accepted co-researcher invite for project ${project.name}`);
+              }}
+              className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await respondToCoResearcherInvite(myPendingCoResearcherInvite.id, 'Declined');
+                if (!res) {
+                  try {
+                    window.dispatchEvent(new CustomEvent('biosample_flash', {
+                      detail: { message: 'Could not decline the invitation. Please try again.', variant: 'error' },
+                    }));
+                  } catch {}
+                  return;
+                }
+                const msg = `Invitation declined for ${project.name}.`;
+                try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
+                addActivity(`${user?.fullName} declined co-researcher invite for project ${project.name}`);
+              }}
+              className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg hover:bg-white bg-white/80"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
       {canSeePendingQueue && (
         <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-semibold text-gray-800">Pending Requests</h2>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-              {pendingForProject.length} pending requests
+              {pendingForProjectQueue.length} pending requests
             </span>
           </div>
-          {pendingForProject.length === 0 ? (
+          {pendingForProjectQueue.length === 0 ? (
             <p className="text-sm text-gray-500">No pending requests.</p>
           ) : (
             <div className="space-y-2">
-              {pendingForProject.map((req) => (
+              {pendingForProjectQueue.map((req) => (
                 <div key={req.id} className="border border-gray-200 rounded-lg p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm">
@@ -394,24 +779,24 @@ export default function ProjectDetail() {
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => approve(req.id)}
-                        disabled={req.type === 'coResearcherInvite' && !isAdmin}
-                        className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => reject(req.id)}
-                        disabled={req.type === 'coResearcherInvite' && !isAdmin}
-                        className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
-                      >
-                        Reject
-                      </button>
-                    </div>
+                    {canApproveOrRejectRequest(req) && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => approve(req.id)}
+                          className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => reject(req.id)}
+                          className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {req.type === 'edit' && Array.isArray(req.changes) && req.changes.length > 0 && (
@@ -642,6 +1027,93 @@ export default function ProjectDetail() {
           </div>
         </div>
       )}
+
+      {coInviteModalOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] overflow-y-auto overscroll-y-contain bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="co-invite-modal-title"
+          >
+            <div className="flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
+              <div className="relative flex w-full max-w-lg max-h-[min(92dvh,52rem)] flex-col overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10">
+                <div className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl bg-gradient-to-r from-[#0F766E] to-[#115E59] px-4 py-2.5 text-white">
+                  <h2 id="co-invite-modal-title" className="text-base font-semibold text-white">
+                    Invite co-researchers
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setCoInviteModalOpen(false)}
+                    className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg text-xl leading-none text-white/90 hover:bg-white/15 hover:text-white"
+                    aria-label="Close dialog"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-b-2xl bg-white px-4 py-4 space-y-4">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium text-gray-800">{project.name}</span>
+                    {' — '}
+                    {isAdmin
+                      ? 'Invitations are sent immediately. Each person can accept or decline from their Projects page or here on this project.'
+                      : 'Your selections are sent to an administrator for approval. When approved, each person receives an invitation.'}
+                  </p>
+                  {inviteableCoResearcherNames.length === 0 ? (
+                    <p className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-4 bg-gray-50">
+                      No eligible people to invite right now (everyone listed may already be on the team, be the lead researcher, or have a pending invitation).
+                    </p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg p-3 max-h-60 overflow-auto space-y-2">
+                      {inviteableCoResearcherNames.map((name) => {
+                        const checked = coInviteSelection.has(name);
+                        return (
+                          <label
+                            key={name}
+                            className="flex items-center gap-2 text-sm text-gray-800 select-none cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setCoInviteSelection((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(name)) next.delete(name);
+                                  else next.add(name);
+                                  return next;
+                                });
+                              }}
+                              className="h-4 w-4 accent-mint-600 shrink-0"
+                            />
+                            <span>{name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCoInviteModalOpen(false)}
+                      className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSubmitCoResearcherInvites()}
+                      disabled={inviteableCoResearcherNames.length === 0}
+                      className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      {isAdmin ? 'Send invitations' : 'Submit request'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

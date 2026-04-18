@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
+import { isPendingCoResearcherInviteForUser, normalizePersonName, projectsPendingCoResearcherInvitesPath } from '../utils/personName';
 
 function StatCard({ label, value, tone = 'mint' }) {
   const cardStyles = {
@@ -201,10 +202,19 @@ export default function Dashboard() {
     pendingCount,
     pendingRequests,
     coResearcherInvites,
+    approvePendingRequest,
+    rejectPendingRequest,
+    addActivity,
   } = useData();
 
-  const visibleProjects = useMemo(() => getVisibleProjects(projects, user), [projects, user]);
-  const visibleSamples = useMemo(() => getVisibleSamples(samples, projects, user), [samples, projects, user]);
+  const visibleProjects = useMemo(
+    () => getVisibleProjects(projects, user, coResearcherInvites),
+    [projects, user, coResearcherInvites]
+  );
+  const visibleSamples = useMemo(
+    () => getVisibleSamples(samples, projects, user, coResearcherInvites),
+    [samples, projects, user, coResearcherInvites]
+  );
   const criticalSamples = useMemo(
     () => visibleSamples.filter((s) => s.status === 'Expired' || s.status === 'Contaminated'),
     [visibleSamples]
@@ -234,11 +244,15 @@ export default function Dashboard() {
 
   const myProjectIds = useMemo(() => new Set(myLeadProjects.map((p) => p.id)), [myLeadProjects]);
   const myPendingRequestCount = useMemo(
-    () => (pendingRequests || []).filter((r) => myProjectIds.has(r.projectId)).length,
+    () => (pendingRequests || []).filter(
+      (r) => myProjectIds.has(r.projectId) && !(r.type === 'coResearcherInvite' && r.resolution)
+    ).length,
     [pendingRequests, myProjectIds]
   );
   const firstPendingProjectId = useMemo(() => {
-    const req = (pendingRequests || []).find((r) => myProjectIds.has(r.projectId));
+    const req = (pendingRequests || []).find(
+      (r) => myProjectIds.has(r.projectId) && !(r.type === 'coResearcherInvite' && r.resolution)
+    );
     return req?.projectId || myLeadProjects[0]?.id || null;
   }, [pendingRequests, myProjectIds, myLeadProjects]);
   const adminSampleReviewRequests = useMemo(
@@ -246,26 +260,73 @@ export default function Dashboard() {
     [pendingRequests]
   );
   const adminCoResearcherReviewRequests = useMemo(
-    () => (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite'),
+    () => (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite' && !r.resolution),
     [pendingRequests]
   );
+
+  const enqueueToastForUser = (fullName, payload) => {
+    if (!fullName) return;
+    const key = `biosample_toast_queue:${fullName}`;
+    try {
+      const raw = sessionStorage.getItem(key);
+      const prev = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(prev) ? prev : [];
+      sessionStorage.setItem(key, JSON.stringify([...arr, payload]));
+    } catch { /* ignore */ }
+  };
+
+  const handleApproveCoResearcherRequest = (req) => {
+    const approved = approvePendingRequest(req.id);
+    if (!approved) return;
+    const invitees = Array.isArray(approved.proposedUpdates?.invitedToList) ? approved.proposedUpdates.invitedToList : [];
+    const proj = projects.find((p) => p.id === approved.projectId);
+    const approverMsg = invitees.length > 0
+      ? `Co-researcher invite request approved. Invites sent to: ${invitees.join(', ')}.`
+      : 'Co-researcher invite request approved.';
+    const requesterMsg = invitees.length > 0
+      ? `Admin approved your co-researcher request for ${proj?.name || approved.projectId}. Invites were sent to: ${invitees.join(', ')}.`
+      : `Admin approved your co-researcher request for ${proj?.name || approved.projectId}.`;
+    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch { /* ignore */ }
+    enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
+    addActivity(`${user?.fullName} approved co-researcher invite request for ${proj?.name || approved.projectId} (invitees: ${invitees.join(', ')})`);
+  };
+
+  const handleRejectCoResearcherRequest = (req) => {
+    const rejected = rejectPendingRequest(req.id);
+    if (!rejected) return;
+    const invitees = Array.isArray(rejected.proposedUpdates?.invitedToList) ? rejected.proposedUpdates.invitedToList : [];
+    const proj = projects.find((p) => p.id === rejected.projectId);
+    const approverMsg = invitees.length > 0
+      ? `Co-researcher invite request declined. No invite sent to: ${invitees.join(', ')}.`
+      : 'Co-researcher invite request declined.';
+    const requesterMsg = invitees.length > 0
+      ? `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}. No invite was sent to: ${invitees.join(', ')}.`
+      : `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}.`;
+    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch { /* ignore */ }
+    enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
+    addActivity(`${user?.fullName} rejected co-researcher invite request for ${proj?.name || rejected.projectId}`);
+  };
   const firstAdminSamplePendingProjectId = useMemo(() => {
     const req = adminSampleReviewRequests.find((r) => r.projectId);
     return req?.projectId || null;
   }, [adminSampleReviewRequests]);
 
   const myInviteCount = useMemo(
-    () => (coResearcherInvites || []).filter((i) => i.status === 'Pending' && i.invitedTo === user?.fullName).length,
+    () => (coResearcherInvites || []).filter((i) => isPendingCoResearcherInviteForUser(i, user)).length,
     [coResearcherInvites, user]
   );
   const myOwnPendingRequestCount = useMemo(
-    () => (pendingRequests || []).filter((r) => r.requestedBy === user?.fullName).length,
+    () => (pendingRequests || []).filter((r) => {
+      const own = (user?.authId && r.requestedByUserId && r.requestedByUserId === user.authId)
+        || r.requestedBy === user?.fullName;
+      return own && !(r.type === 'coResearcherInvite' && r.resolution);
+    }).length,
     [pendingRequests, user]
   );
   const myPendingInvites = useMemo(
     () =>
       (coResearcherInvites || [])
-        .filter((inv) => inv.status === 'Pending' && inv.invitedTo === user?.fullName)
+        .filter((inv) => isPendingCoResearcherInviteForUser(inv, user))
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [coResearcherInvites, user]
   );
@@ -274,7 +335,9 @@ export default function Dashboard() {
     const match = myLeadProjects
       .map((project) => ({
         project,
-        count: (pendingRequests || []).filter((r) => r.projectId === project.id).length,
+        count: (pendingRequests || []).filter(
+          (r) => r.projectId === project.id && !(r.type === 'coResearcherInvite' && r.resolution)
+        ).length,
       }))
       .find((x) => x.count > 0);
     return match || null;
@@ -500,17 +563,26 @@ export default function Dashboard() {
     { title: 'At-risk samples', count: criticalSamples.length, to: '/samples', detail: 'Expired or contaminated samples need review', tone: 'rose' },
   ];
 
-  const researcherActions = [
-    { title: 'Co-researcher invites', count: myInviteCount, to: '/projects', detail: 'Accept or decline pending project invites', tone: 'amber' },
-    {
-      title: 'Requests waiting on your decision',
-      count: myPendingRequestCount,
-      to: firstPendingProjectId ? `/projects/${firstPendingProjectId}` : '/projects',
-      detail: 'Open project detail and resolve requests',
-      tone: 'rose',
-    },
-    { title: 'At-risk samples', count: criticalSamples.length, to: '/samples', detail: 'Review expired/contaminated samples', tone: 'rose' },
-  ];
+  const researcherActions = useMemo(
+    () => [
+      {
+        title: 'Co-researcher invites',
+        count: myInviteCount,
+        to: projectsPendingCoResearcherInvitesPath,
+        detail: 'Accept or decline pending project invites',
+        tone: 'amber',
+      },
+      {
+        title: 'Requests waiting on your decision',
+        count: myPendingRequestCount,
+        to: firstPendingProjectId ? `/projects/${firstPendingProjectId}` : '/projects',
+        detail: 'Open project detail and resolve requests',
+        tone: 'rose',
+      },
+      { title: 'At-risk samples', count: criticalSamples.length, to: '/samples', detail: 'Review expired/contaminated samples', tone: 'rose' },
+    ],
+    [criticalSamples.length, firstPendingProjectId, myInviteCount, myPendingRequestCount]
+  );
 
   const studentActions = [
     { title: 'Published projects to explore', count: publishedProjects, to: '/projects', detail: 'Open projects available to students', tone: 'mint' },
@@ -521,7 +593,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-col gap-0.5">
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
         <p className="text-xs text-gray-500">{user?.role} control view</p>
       </div>
@@ -576,6 +648,66 @@ export default function Dashboard() {
               )}
             </div>
           </section>
+
+          {adminCoResearcherReviewRequests.length > 0 && (
+            <section className="rounded-xl border border-indigo-100 bg-white p-4 shadow-sm space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-gray-800">Co-researcher requests</h3>
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900">
+                  {adminCoResearcherReviewRequests.length} pending
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Approve or decline here without opening notifications. You can also manage these on the{' '}
+                <Link to="/projects" className="text-indigo-700 font-medium hover:underline">Projects</Link> page.
+              </p>
+              <ul className="space-y-2">
+                {adminCoResearcherReviewRequests.map((req) => {
+                  const proj = projects.find((p) => p.id === req.projectId);
+                  const invitees = Array.isArray(req.proposedUpdates?.invitedToList) ? req.proposedUpdates.invitedToList : [];
+                  return (
+                    <li
+                      key={req.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 text-sm"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium text-gray-800">{proj?.name || req.projectId}</p>
+                        <p className="text-xs text-gray-500">
+                          Requested by <span className="font-medium">{normalizePersonName(req.requestedBy)}</span>
+                          {req.submittedAt ? ` · ${new Date(req.submittedAt).toLocaleString()}` : ''}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Invite{invitees.length === 1 ? '' : 's'}: {invitees.length ? invitees.join(', ') : '—'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleApproveCoResearcherRequest(req)}
+                          className="px-3 py-1.5 rounded-lg bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium hover:opacity-95 transition-opacity"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectCoResearcherRequest(req)}
+                          className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          Decline
+                        </button>
+                        <Link
+                          to={`/projects/${req.projectId}`}
+                          className="inline-flex items-center px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-medium text-indigo-800 hover:bg-indigo-50"
+                        >
+                          Open project
+                        </Link>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
 
           <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <StatCard label="Total Samples" value={samples.length} />
@@ -703,7 +835,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 <Link
-                  to="/projects"
+                  to={projectsPendingCoResearcherInvitesPath}
                   className="inline-flex mt-2 px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
                 >
                   View All Invites

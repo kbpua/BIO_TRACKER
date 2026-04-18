@@ -13,6 +13,7 @@ import Organisms from './pages/Organisms';
 import OrganismDetail from './pages/OrganismDetail';
 import UserManagement from './pages/UserManagement';
 import CreateUser from './pages/CreateUser';
+import Notifications from './pages/Notifications';
 
 function App() {
   const { user } = useAuth();
@@ -38,6 +39,7 @@ function App() {
         <Route path="projects/:id" element={<ProjectDetail />} />
         <Route path="organisms" element={<Organisms />} />
         <Route path="organisms/:id" element={<OrganismDetail />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route
           path="users"
           element={

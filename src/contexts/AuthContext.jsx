@@ -7,6 +7,31 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const supabaseEnabled = isSupabaseConfigured();
+
+  const createNotificationDirect = useCallback(async ({
+    userId,
+    type = 'INFO',
+    title,
+    description = '',
+    linkTo = '/dashboard',
+    targetEntity = null,
+    targetId = null,
+  }) => {
+    if (!supabaseEnabled || !supabase || !userId || !title) return;
+    const { error } = await supabase.rpc('create_notification', {
+      p_user_id: userId,
+      p_type: type,
+      p_title: title,
+      p_description: description,
+      p_link_to: linkTo,
+      p_target_entity: targetEntity,
+      p_target_id: targetId,
+    });
+    if (error) {
+      console.error('create_notification RPC failed:', error.message);
+    }
+  }, [supabaseEnabled]);
+
   const [isHydratingSession, setIsHydratingSession] = useState(supabaseEnabled);
   const [authBlockedMessage, setAuthBlockedMessage] = useState('');
   const [user, setUser] = useState(() => {
@@ -289,6 +314,30 @@ export function AuthProvider({ children }) {
           .eq('id', userId);
       }
 
+      // Admin alerts for new signups are handled in the database (see migration
+      // notify_admins_profile_events) so they work even when RLS blocks client RPC inserts.
+
+      if (role === 'Student' && userId) {
+        await createNotificationDirect({
+          userId,
+          type: 'ACCOUNT',
+          title: 'Account Created',
+          description: 'Your student account has been activated. Welcome aboard.',
+          linkTo: '/dashboard',
+          targetEntity: 'user',
+          targetId: userId,
+        });
+        await createNotificationDirect({
+          userId,
+          type: 'INFO',
+          title: 'Welcome to BioSample Tracker!',
+          description: 'Explore published research projects, samples, and organisms to support your learning.',
+          linkTo: '/projects',
+          targetEntity: 'project',
+          targetId: null,
+        });
+      }
+
       // If approval is required, force logout immediately even if
       // Supabase returned a session (e.g. email confirmation disabled).
       if (desiredStatus === 'Pending') {
@@ -303,7 +352,7 @@ export function AuthProvider({ children }) {
       };
     }
     return { success: false, error: 'Supabase is not configured.' };
-  }, [supabaseEnabled]);
+  }, [createNotificationDirect, supabaseEnabled]);
 
   const loginWithGoogle = useCallback(async () => {
     if (!supabaseEnabled || !supabase) {

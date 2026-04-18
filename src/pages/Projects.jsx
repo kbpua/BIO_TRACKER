@@ -8,6 +8,11 @@ import { PROJECT_STATUSES } from '../data/mockData';
 import { generateProjectId } from '../utils/projectId';
 import { PUBLICATION_STATUSES, canUserViewProject, getVisibleSamples, getProjectPublicationStatus } from '../utils/visibility';
 import { ViewIconLink, EditIconButton, DeleteIconButton } from '../components/TableActionButtons';
+import {
+  displayNamesEqual,
+  isPendingCoResearcherInviteForUser,
+  PENDING_CO_RESEARCHER_INVITES_HASH,
+} from '../utils/personName';
 
 function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEditLeadResearcher }) {
   const { users, projects } = useData();
@@ -93,14 +98,14 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
 
   return (
     <form
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
         const cleaned = {
           ...form,
           coResearchers: (Array.isArray(form.coResearchers) ? form.coResearchers : [])
             .filter((n) => n && n !== form.leadResearcher),
         };
-        onSave(cleaned);
+        await onSave(cleaned);
       }}
       className="space-y-3"
     >
@@ -266,10 +271,11 @@ export default function Projects() {
     coResearcherInvites,
     respondToCoResearcherInvite,
     addActivity,
+    refreshInvitesAndRequests,
   } = useData();
 
   const canEditProject = (p) =>
-    canManageProjects || (isResearcher && p.leadResearcher === user?.fullName);
+    canManageProjects || (isResearcher && displayNamesEqual(p.leadResearcher, user?.fullName));
   const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [search, setSearch] = useState('');
@@ -282,13 +288,55 @@ export default function Projects() {
     setFilterPublication(incoming);
   }, [location.state]);
 
-  const visibleSamples = getVisibleSamples(samples, projects, user);
+  useEffect(() => {
+    void refreshInvitesAndRequests();
+    const intervalMs = 8000;
+    const intervalId = window.setInterval(() => {
+      void refreshInvitesAndRequests();
+    }, intervalMs);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshInvitesAndRequests();
+    };
+    const onFocus = () => {
+      void refreshInvitesAndRequests();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refreshInvitesAndRequests]);
+
+  const myInvites = (coResearcherInvites || []).filter((i) => isPendingCoResearcherInviteForUser(i, user));
+
+  useEffect(() => {
+    if (location.pathname !== '/projects') return;
+    const raw = (location.hash || '').replace(/^#/, '');
+    if (raw !== PENDING_CO_RESEARCHER_INVITES_HASH) return;
+    const t = window.setTimeout(() => {
+      document.getElementById(PENDING_CO_RESEARCHER_INVITES_HASH)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [location.pathname, location.hash, coResearcherInvites, myInvites.length]);
+
+  const visibleSamples = useMemo(
+    () => getVisibleSamples(samples, projects, user, coResearcherInvites),
+    [samples, projects, user, coResearcherInvites]
+  );
   const countByProject = visibleSamples.reduce((acc, s) => {
     acc[s.projectId] = (acc[s.projectId] || 0) + 1;
     return acc;
   }, {});
 
-  const visibleProjects = projects.filter((p) => canUserViewProject(user, p));
+  const visibleProjects = useMemo(
+    () => projects.filter((p) => canUserViewProject(user, p, coResearcherInvites)),
+    [projects, user, coResearcherInvites]
+  );
   const projectOrder = useMemo(
     () => new Map(projects.map((p, idx) => [p.id, idx])),
     [projects]
@@ -309,7 +357,7 @@ export default function Projects() {
     setFilterPublication('All');
   };
 
-  const handleSave = (data) => {
+  const handleSave = async (data) => {
     if (modal === 'new') {
       const id = generateProjectId(data.name, data.startDate, projects);
       if (!id) {
@@ -350,7 +398,7 @@ export default function Projects() {
           const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${existing.name}: ${inviteAdded.join(', ')}`;
           try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
         } else {
-          const created = submitCoResearcherInviteRequest({
+          const created = await submitCoResearcherInviteRequest({
             projectId: existing.id,
             requestedBy: user?.fullName || 'Unknown',
             invitedToList: inviteAdded,
@@ -384,11 +432,10 @@ export default function Projects() {
     setModal(null);
   };
 
-  const myInvites = (coResearcherInvites || []).filter(
-    (i) => i.status === 'Pending' && i.invitedTo === user?.fullName
-  );
   const adminCoResearcherRequests = useMemo(
-    () => (isAdmin ? (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite') : []),
+    () => (isAdmin
+      ? (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite' && !r.resolution)
+      : []),
     [isAdmin, pendingRequests]
   );
 
@@ -461,7 +508,10 @@ export default function Projects() {
       </div>
 
       {myInvites.length > 0 && (
-        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
+        <div
+          id={PENDING_CO_RESEARCHER_INVITES_HASH}
+          className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3 scroll-mt-20"
+        >
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-800">Co-Researcher Invitations</h2>
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
@@ -482,25 +532,37 @@ export default function Projects() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        const res = respondToCoResearcherInvite(inv.id, 'Accepted');
-                        const msg = res
-                          ? `Invitation accepted. You are now a Co-Researcher on ${proj?.name || inv.projectId}.`
-                          : 'Invitation accepted.';
+                      onClick={async () => {
+                        const res = await respondToCoResearcherInvite(inv.id, 'Accepted');
+                        if (!res) {
+                          try {
+                            window.dispatchEvent(new CustomEvent('biosample_flash', {
+                              detail: { message: 'Could not accept the invitation. Please try again.', variant: 'error' },
+                            }));
+                          } catch {}
+                          return;
+                        }
+                        const msg = `Invitation accepted. You are now a Co-Researcher on ${proj?.name || inv.projectId}.`;
                         try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
                         addActivity(`${user?.fullName} accepted co-researcher invite for project ${proj?.name || inv.projectId}`);
                       }}
                       className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
                     >
-                      Approve
+                      Accept
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        const res = respondToCoResearcherInvite(inv.id, 'Declined');
-                        const msg = res
-                          ? `Invitation declined for ${proj?.name || inv.projectId}.`
-                          : 'Invitation declined.';
+                      onClick={async () => {
+                        const res = await respondToCoResearcherInvite(inv.id, 'Declined');
+                        if (!res) {
+                          try {
+                            window.dispatchEvent(new CustomEvent('biosample_flash', {
+                              detail: { message: 'Could not decline the invitation. Please try again.', variant: 'error' },
+                            }));
+                          } catch {}
+                          return;
+                        }
+                        const msg = `Invitation declined for ${proj?.name || inv.projectId}.`;
                         try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'error' } })); } catch {}
                         addActivity(`${user?.fullName} declined co-researcher invite for project ${proj?.name || inv.projectId}`);
                       }}

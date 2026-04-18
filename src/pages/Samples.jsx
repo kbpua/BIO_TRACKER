@@ -9,7 +9,7 @@ import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 export default function Samples() {
   const navigate = useNavigate();
   const { user, canManageSamples, canDeleteSamples, canExportCSV, isAdmin, isResearcher } = useAuth();
-  const { samples, organisms, projects, deleteSample, addActivity } = useData();
+  const { samples, organisms, projects, coResearcherInvites, deleteSample, addActivity } = useData();
   const [search, setSearch] = useState('');
   const [filterOrganism, setFilterOrganism] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -20,8 +20,14 @@ export default function Samples() {
   const getOrgName = (id) => organisms.find((o) => o.id === id)?.scientificName ?? '';
   const getProjName = (id) => projects.find((p) => p.id === id)?.name ?? '';
 
-  const visibleProjects = useMemo(() => getVisibleProjects(projects, user), [projects, user]);
-  const visibleSamples = useMemo(() => getVisibleSamples(samples, projects, user), [samples, projects, user]);
+  const visibleProjects = useMemo(
+    () => getVisibleProjects(projects, user, coResearcherInvites),
+    [projects, user, coResearcherInvites]
+  );
+  const visibleSamples = useMemo(
+    () => getVisibleSamples(samples, projects, user, coResearcherInvites),
+    [samples, projects, user, coResearcherInvites]
+  );
 
   const rows = useMemo(() => {
     return visibleSamples.map((s) => ({

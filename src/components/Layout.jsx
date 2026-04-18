@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Bell,
   LayoutDashboard,
   FlaskConical,
   FolderKanban,
@@ -10,8 +11,12 @@ import {
   Pin,
   PinOff,
   LogOut,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import { formatRelativeTime, getNotificationMeta } from '../utils/notifications';
 
 const navItem = (to, label, description, Icon) => ({ to, label, description, Icon });
 
@@ -26,16 +31,40 @@ function getUserInitials(fullName) {
 
 export function Layout({ children }) {
   const { user, logout, isAdmin } = useAuth();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    newArrivalPulse,
+    beginSoftDelete,
+    undoSoftDelete,
+    clearAllNotifications,
+  } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [toasts, setToasts] = useState([]);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [notificationFilter, setNotificationFilter] = useState('All');
+  const [undoToasts, setUndoToasts] = useState([]);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const sidebarRef = useRef(null);
+  const bellButtonRef = useRef(null);
+  const notificationDropdownRef = useRef(null);
+  const undoToastRef = useRef(null);
 
   const toastQueueKey = user?.fullName ? `biosample_toast_queue:${user.fullName}` : null;
   const isExpanded = isPinned || isHovered;
   const roleLabel = user?.role === 'Admin' ? 'System Administrator' : user?.role || 'User';
+  const visibleNotifications = useMemo(
+    () => (notificationFilter === 'Unread'
+      ? notifications.filter((n) => !n.isRead)
+      : notifications).slice(0, 50),
+    [notificationFilter, notifications]
+  );
+  const unreadBadgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
   const pushToast = (payload) => {
     const toast = {
       id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -87,6 +116,37 @@ export function Layout({ children }) {
   }, [toasts.length]);
 
   useEffect(() => {
+    if (undoToasts.length === 0) return undefined;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setUndoToasts((prev) =>
+        prev.filter((t) => now - t.createdAt < t.durationMs)
+      );
+    }, 200);
+    return () => clearInterval(interval);
+  }, [undoToasts.length]);
+
+  const pushUndoToast = (notificationId) => {
+    const tid = `undo-${notificationId}-${Date.now()}`;
+    setUndoToasts((prev) =>
+      [...prev, { tid, notificationId, createdAt: Date.now(), durationMs: 5000 }].slice(-3)
+    );
+  };
+
+  const handleDropdownSoftDelete = (e, n) => {
+    e.preventDefault();
+    e.stopPropagation();
+    beginSoftDelete(n);
+    pushUndoToast(n.notificationId);
+  };
+
+  const handleConfirmClearAll = async () => {
+    await clearAllNotifications();
+    setClearAllOpen(false);
+    setUndoToasts([]);
+  };
+
+  useEffect(() => {
     if (!isPinned) return undefined;
     const onMouseDown = (e) => {
       const el = sidebarRef.current;
@@ -98,6 +158,34 @@ export function Layout({ children }) {
     window.addEventListener('mousedown', onMouseDown);
     return () => window.removeEventListener('mousedown', onMouseDown);
   }, [isPinned]);
+
+  useEffect(() => {
+    if (!showNotificationPanel) return undefined;
+    const onMouseDown = (e) => {
+      const bell = bellButtonRef.current;
+      const panel = notificationDropdownRef.current;
+      const undoPanel = undoToastRef.current;
+      if (!panel && !bell) return;
+      if (
+        (!bell || !bell.contains(e.target))
+        && (!panel || !panel.contains(e.target))
+        && (!undoPanel || !undoPanel.contains(e.target))
+      ) {
+        setShowNotificationPanel(false);
+      }
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    return () => window.removeEventListener('mousedown', onMouseDown);
+  }, [showNotificationPanel]);
+
+  useEffect(() => {
+    // When account context changes (e.g. admin -> researcher), clear any
+    // transient notification overlays so no stale fixed layer remains.
+    setShowNotificationPanel(false);
+    setClearAllOpen(false);
+    setUndoToasts([]);
+    setNotificationFilter('All');
+  }, [user?.authId]);
 
   const toastStyles = useMemo(() => ({
     success: {
@@ -253,43 +341,266 @@ export function Layout({ children }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 pl-[98px] md:pl-[114px]">
-        <main className="flex-1 p-6 overflow-auto relative">
+        <main className="flex-1 overflow-auto relative p-6 pt-20 pr-24 md:pr-28">
           {/* Toast notifications (upper-right) */}
-          <div className="fixed top-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
-            {toasts.map((t) => {
-              const style = toastStyles[t.variant] || toastStyles.success;
-              const elapsed = Date.now() - t.createdAt;
-              const pct = Math.max(0, Math.min(100, (elapsed / t.durationMs) * 100));
-              return (
-                <div
-                  key={t.id}
-                  className={`border rounded-2xl shadow-2xl overflow-hidden ${style.container} border-opacity-30`}
-                >
-                  <div className="p-4 flex items-start justify-between gap-3">
-                    <p className="text-sm leading-snug">{t.message}</p>
-                    <button
-                      type="button"
-                      onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-                      className="text-sm font-medium opacity-90 hover:opacity-100"
-                      aria-label="Dismiss notification"
-                      title="Dismiss"
-                    >
-                      ×
-                    </button>
+          {toasts.length > 0 && (
+            <div className="fixed top-20 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] space-y-3 pointer-events-none">
+              {toasts.map((t) => {
+                const style = toastStyles[t.variant] || toastStyles.success;
+                const elapsed = Date.now() - t.createdAt;
+                const pct = Math.max(0, Math.min(100, (elapsed / t.durationMs) * 100));
+                return (
+                  <div
+                    key={t.id}
+                    className={`pointer-events-auto border rounded-2xl shadow-2xl overflow-hidden ${style.container} border-opacity-30`}
+                  >
+                    <div className="p-4 flex items-start justify-between gap-3">
+                      <p className="text-sm leading-snug">{t.message}</p>
+                      <button
+                        type="button"
+                        onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
+                        className="text-sm font-medium opacity-90 hover:opacity-100"
+                        aria-label="Dismiss notification"
+                        title="Dismiss"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="h-1 bg-white/15">
+                      <div
+                        className={`h-full ${style.bar}`}
+                        style={{ width: `${100 - pct}%`, transition: 'width 200ms linear' }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1 bg-white/15">
-                    <div
-                      className={`h-full ${style.bar}`}
-                      style={{ width: `${100 - pct}%`, transition: 'width 200ms linear' }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
           {children}
         </main>
+
+        {/* Top-right notification controls */}
+            {!showNotificationPanel && (
+              <div
+                ref={bellButtonRef}
+                className="fixed top-4 right-4 z-[1000] w-11 h-11 pointer-events-auto md:right-6"
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowNotificationPanel(true)}
+                  className={`relative h-11 w-11 rounded-full border border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 transition-colors ${
+                    newArrivalPulse ? 'animate-pulse' : ''
+                  }`}
+                  aria-label="Notifications"
+                  title="Notifications"
+                >
+                  <Bell className="h-5 w-5 mx-auto" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center">
+                      {unreadBadgeLabel}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {showNotificationPanel && (
+              <div
+                ref={notificationDropdownRef}
+                className="fixed top-16 right-4 z-[1000] pointer-events-auto md:right-6"
+              >
+                <div className="w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-slate-900 shrink-0 pt-0.5">Notifications</h3>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setNotificationFilter((f) => (f === 'All' ? 'Unread' : 'All'))}
+                      className="text-xs text-slate-500 hover:text-teal-700"
+                    >
+                      {notificationFilter}
+                    </button>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllAsRead}
+                        className="text-xs font-medium text-teal-700 hover:text-teal-800"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setClearAllOpen(true)}
+                        className="text-xs font-medium text-slate-500 hover:text-rose-600"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowNotificationPanel(false)}
+                      className="ml-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      aria-label="Close notifications"
+                      title="Close"
+                    >
+                      <X className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-[500px] overflow-auto">
+                  {visibleNotifications.length === 0 ? (
+                    <div className="px-6 py-12 text-center">
+                      <Bell className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm text-slate-600">You&apos;re all caught up! No notifications to show.</p>
+                    </div>
+                  ) : (
+                    visibleNotifications.map((n) => {
+                      const meta = getNotificationMeta(n.type, n.title);
+                      const Icon = meta.icon;
+                      return (
+                        <div
+                          key={n.notificationId}
+                          className={`group relative flex items-stretch border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors ${
+                            n.isRead ? 'bg-white' : 'bg-teal-50/40'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!n.isRead) await markAsRead(n.notificationId);
+                              setShowNotificationPanel(false);
+                              navigate(n.linkTo || '/dashboard');
+                            }}
+                            className="flex-1 text-left px-4 py-3 min-w-0"
+                          >
+                            <div className="flex gap-3 pr-8">
+                              <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${meta.accent}`}>
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="grow min-w-0">
+                                <div className="flex justify-between gap-2">
+                                  <p className="font-semibold text-sm text-slate-900 truncate">{n.title}</p>
+                                  <span className="text-xs text-slate-400 shrink-0">{formatRelativeTime(n.createdAt)}</span>
+                                </div>
+                                <p className="text-sm text-slate-600 mt-0.5 line-clamp-2">{n.description}</p>
+                              </div>
+                              {!n.isRead && <span className="h-2.5 w-2.5 rounded-full bg-teal-500 mt-2 shrink-0" />}
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDropdownSoftDelete(e, n)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 hover:text-rose-600 transition-opacity"
+                            aria-label="Delete notification"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNotificationPanel(false);
+                    navigate('/notifications');
+                  }}
+                  className="w-full py-3 text-sm font-medium text-teal-700 hover:bg-teal-50 border-t border-slate-200"
+                >
+                  View all notifications
+                </button>
+                </div>
+              </div>
+            )}
+
+            {/* Undo toasts: same shell layer as bell */}
+            {undoToasts.length > 0 && (
+              <div
+                ref={undoToastRef}
+                className="fixed top-[4.5rem] right-4 z-[1010] w-[360px] max-w-[calc(100vw-2rem)] space-y-2 pointer-events-none md:right-6"
+              >
+                {undoToasts.map((u) => {
+                  const elapsed = Date.now() - u.createdAt;
+                  const pct = Math.max(0, Math.min(100, (elapsed / u.durationMs) * 100));
+                  return (
+                    <div
+                      key={u.tid}
+                      className="pointer-events-auto border border-slate-200 rounded-2xl shadow-xl overflow-hidden bg-white text-slate-900"
+                    >
+                      <div className="p-3 flex items-center justify-between gap-3">
+                        <p className="text-sm">Notification removed</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              undoSoftDelete(u.notificationId);
+                              setUndoToasts((prev) => prev.filter((x) => x.tid !== u.tid));
+                            }}
+                            className="text-sm font-semibold text-teal-700 hover:text-teal-800"
+                          >
+                            Undo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setUndoToasts((prev) => prev.filter((x) => x.tid !== u.tid))}
+                            className="text-slate-400 hover:text-slate-600 text-lg leading-none px-1"
+                            aria-label="Dismiss"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                      <div className="h-1 bg-slate-100">
+                        <div
+                          className="h-full bg-teal-500/90"
+                          style={{ width: `${100 - pct}%`, transition: 'width 200ms linear' }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
       </div>
+
+      {clearAllOpen && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-all-notifications-title"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+            <h2 id="clear-all-notifications-title" className="text-lg font-semibold text-slate-900">
+              Clear all notifications?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Are you sure you want to delete all notifications? This action cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setClearAllOpen(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAll}
+                className="px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-medium hover:bg-rose-700"
+              >
+                Delete all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

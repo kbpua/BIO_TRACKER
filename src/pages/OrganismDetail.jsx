@@ -8,7 +8,7 @@ import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
 
 export default function OrganismDetail() {
   const { id } = useParams();
-  const { projects, samples, organisms } = useData();
+  const { projects, samples, organisms, coResearcherInvites } = useData();
   const { user } = useAuth();
   const [projSearch, setProjSearch] = useState('');
   const [projStatus, setProjStatus] = useState('');
@@ -19,8 +19,14 @@ export default function OrganismDetail() {
   const organism = organisms.find((o) => o.id === id);
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
 
-  const visibleProjects = useMemo(() => getVisibleProjects(projects, user), [projects, user]);
-  const visibleSamples = useMemo(() => getVisibleSamples(samples, projects, user), [samples, projects, user]);
+  const visibleProjects = useMemo(
+    () => getVisibleProjects(projects, user, coResearcherInvites),
+    [projects, user, coResearcherInvites]
+  );
+  const visibleSamples = useMemo(
+    () => getVisibleSamples(samples, projects, user, coResearcherInvites),
+    [samples, projects, user, coResearcherInvites]
+  );
 
   const relatedSamples = useMemo(() => {
     if (!organism) return [];

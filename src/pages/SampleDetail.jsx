@@ -33,7 +33,7 @@ function EduCard({ title, icon: Icon, children, headerClass }) {
 export default function SampleDetail() {
   const { id } = useParams();
   const { canManageSamples, user } = useAuth();
-  const { samples, organisms, projects } = useData();
+  const { samples, organisms, projects, coResearcherInvites } = useData();
 
   const getOrgName = (oid) => organisms.find((o) => o.id === oid)?.scientificName ?? '';
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
@@ -66,7 +66,7 @@ export default function SampleDetail() {
     );
   }
 
-  if (proj && !canUserViewProject(user, proj)) {
+  if (proj && !canUserViewProject(user, proj, coResearcherInvites)) {
     return (
       <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
         <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>

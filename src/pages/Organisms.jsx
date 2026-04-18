@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -112,13 +112,16 @@ function OrganismForm({ organism, organisms, onSave, onCancel }) {
 
 export default function Organisms() {
   const { canManageOrganisms, user } = useAuth();
-  const { organisms, samples, projects, addOrganism, updateOrganism, deleteOrganism } = useData();
+  const { organisms, samples, projects, coResearcherInvites, addOrganism, updateOrganism, deleteOrganism } = useData();
   const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [search, setSearch] = useState('');
   const [filterKingdom, setFilterKingdom] = useState('');
 
-  const visibleSamples = getVisibleSamples(samples, projects, user);
+  const visibleSamples = useMemo(
+    () => getVisibleSamples(samples, projects, user, coResearcherInvites),
+    [samples, projects, user, coResearcherInvites]
+  );
   const countByOrganism = visibleSamples.reduce((acc, s) => {
     acc[s.organismId] = (acc[s.organismId] || 0) + 1;
     return acc;
