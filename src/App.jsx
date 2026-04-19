@@ -3,6 +3,8 @@ import { useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 import Login from './pages/Login';
+import CompleteGoogleProfile from './pages/CompleteGoogleProfile';
+import GoogleAccountPending from './pages/GoogleAccountPending';
 import Dashboard from './pages/Dashboard';
 import Samples from './pages/Samples';
 import SampleDetail from './pages/SampleDetail';
@@ -20,6 +22,8 @@ function App() {
 
   return (
     <Routes>
+      <Route path="/auth/complete-google-profile" element={<CompleteGoogleProfile />} />
+      <Route path="/auth/google-pending" element={<GoogleAccountPending />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route
         path="/"

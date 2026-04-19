@@ -72,7 +72,16 @@ export default function Login() {
     confirmPassword: '',
     role: 'Researcher',
   });
-  const { login, loginWithGoogle, register, isSupabaseAuth, isHydratingSession, authBlockedMessage, clearAuthBlockedMessage } = useAuth();
+  const {
+    login,
+    loginWithGoogle,
+    register,
+    isSupabaseAuth,
+    isHydratingSession,
+    authBlockedMessage,
+    clearAuthBlockedMessage,
+    googleRegistrationUi,
+  } = useAuth();
   const { users, addUser } = useData();
   const navigate = useNavigate();
   const location = useLocation();
@@ -80,7 +89,12 @@ export default function Login() {
 
   const [processingOAuth, setProcessingOAuth] = useState(() => {
     const hash = window.location.hash || '';
-    return hash.includes('access_token') || hash.includes('refresh_token');
+    const search = window.location.search || '';
+    return (
+      hash.includes('access_token') ||
+      hash.includes('refresh_token') ||
+      search.includes('code=')
+    );
   });
 
   useEffect(() => {
@@ -88,6 +102,30 @@ export default function Login() {
     const timeout = setTimeout(() => setProcessingOAuth(false), 6000);
     return () => clearTimeout(timeout);
   }, [processingOAuth]);
+
+  useEffect(() => {
+    if (!isHydratingSession && processingOAuth) {
+      setProcessingOAuth(false);
+    }
+  }, [isHydratingSession, processingOAuth]);
+
+  useEffect(() => {
+    if (isHydratingSession) return;
+    if (!isSupabaseAuth) return;
+    if (googleRegistrationUi?.step === 'needs_role') {
+      navigate('/auth/complete-google-profile', { replace: true });
+    } else if (googleRegistrationUi?.step === 'pending_researcher') {
+      navigate('/auth/google-pending', { replace: true });
+    }
+  }, [googleRegistrationUi, isHydratingSession, isSupabaseAuth, navigate]);
+
+  useEffect(() => {
+    if (!location.state?.googleResearcherSubmitted) return;
+    setSuccessMessage(
+      'Your account has been submitted for admin approval. You will be able to access the system once an administrator approves your account.'
+    );
+    navigate('/login', { replace: true, state: {} });
+  }, [location.state?.googleResearcherSubmitted, navigate]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
