@@ -185,9 +185,13 @@ export default function SampleForm() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">
-        {isEdit ? 'Edit Sample' : (isCoResearcher ? 'Request Add Sample' : 'Add Sample')}
-      </h1>
+      <header className="pb-6 mb-8">
+        <div className="min-h-11 flex items-center">
+          <h1 className="text-2xl font-bold text-gray-800">
+            {isEdit ? 'Edit Sample' : (isCoResearcher ? 'Request Add Sample' : 'Add Sample')}
+          </h1>
+        </div>
+      </header>
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-mint-100 shadow-sm p-6 space-y-4">
         {isEdit ? (
           <div>

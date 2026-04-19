@@ -79,30 +79,33 @@ export default function Samples() {
   const canDeleteSample = (r) => canDeleteSamples && (isAdmin || (isResearcher && r.collectedBy === user?.fullName));
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-800">Samples</h1>
-        <div className="flex flex-wrap gap-2">
-          {canManageSamples && (
-            <Link
-              to="/samples/new"
-              className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
-            >
-              Add Sample
-            </Link>
-          )}
-          {canExportCSV && (
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="px-4 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
-            >
-              Export CSV
-            </button>
-          )}
+    <div>
+      <header className="pb-6 mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 min-h-11">
+          <h1 className="text-2xl font-bold text-gray-800">Samples</h1>
+          <div className="flex flex-wrap gap-2">
+            {canManageSamples && (
+              <Link
+                to="/samples/new"
+                className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
+              >
+                Add Sample
+              </Link>
+            )}
+            {canExportCSV && (
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="px-4 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
+              >
+                Export CSV
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
+      <div className="space-y-4">
       <div className="bg-white rounded-xl border border-mint-100 p-4 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <input
@@ -227,6 +230,7 @@ export default function Samples() {
         {filtered.length === 0 && (
           <p className="py-8 text-center text-gray-500">No samples match your filters.</p>
         )}
+      </div>
       </div>
 
       {confirmDelete && (

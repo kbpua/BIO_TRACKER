@@ -341,7 +341,7 @@ export function Layout({ children }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 pl-[98px] md:pl-[114px]">
-        <main className="flex-1 overflow-auto relative p-6 pt-20 pr-24 md:pr-28">
+        <main className="flex-1 overflow-auto relative px-6 pt-4 pb-6 pr-24 md:pr-28">
           {/* Toast notifications (upper-right) */}
           {toasts.length > 0 && (
             <div className="fixed top-20 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] space-y-3 pointer-events-none">

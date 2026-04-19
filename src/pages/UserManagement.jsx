@@ -62,18 +62,21 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
-        <button
-          type="button"
-          onClick={() => navigate('/create-user')}
-          className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
-        >
-          Create User
-        </button>
-      </div>
+    <div>
+      <header className="pb-6 mb-8">
+        <div className="flex justify-between items-center min-h-11">
+          <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
+          <button
+            type="button"
+            onClick={() => navigate('/create-user')}
+            className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
+          >
+            Create User
+          </button>
+        </div>
+      </header>
 
+      <div className="space-y-6">
       {pending.length > 0 && (
         <div className="bg-amber-50/90 border border-amber-300 rounded-xl p-5 shadow-sm">
           <h2 className="font-bold text-amber-900 text-lg mb-4">Pending Approvals</h2>
@@ -177,6 +180,7 @@ export default function UserManagement() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
 
       {viewUserId && (() => {

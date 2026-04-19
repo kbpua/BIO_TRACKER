@@ -592,12 +592,17 @@ export default function Dashboard() {
   const topActions = isAdmin ? adminActions : isResearcher ? researcherActions : studentActions;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-0.5">
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <p className="text-xs text-gray-500">{user?.role} control view</p>
-      </div>
+    <div>
+      <header className="pb-6 mb-8">
+        <div className="flex flex-col gap-0.5">
+          <div className="min-h-11 flex items-center">
+            <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+          </div>
+          <p className="text-xs text-gray-500">{user?.role} control view</p>
+        </div>
+      </header>
 
+      <div className="space-y-4">
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-gray-700">Needs Attention</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1043,6 +1048,7 @@ export default function Dashboard() {
           </section>
         </>
       )}
+      </div>
     </div>
   );
 }

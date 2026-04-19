@@ -227,8 +227,12 @@ export default function CreateUser() {
 
   return (
     <div className="max-w-5xl">
-      <h1 className="text-3xl font-bold text-gray-800 mb-1">Create User Account</h1>
-      <p className="text-sm text-gray-500 mb-5">Set up user details, credentials, and access in one place.</p>
+      <header className="pb-6 mb-8">
+        <div className="min-h-11 flex items-center">
+          <h1 className="text-3xl font-bold text-gray-800">Create User Account</h1>
+        </div>
+        <p className="text-sm text-gray-500 mt-1.5">Set up user details, credentials, and access in one place.</p>
+      </header>
 
       {message.text && (
         <div

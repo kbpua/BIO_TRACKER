@@ -160,19 +160,23 @@ export default function Organisms() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Organisms</h1>
-        {canManageOrganisms && (
-          <button
-            type="button"
-            onClick={() => setModal('new')}
-            className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
-          >
-            Add Organism
-          </button>
-        )}
-      </div>
+    <div>
+      <header className="pb-6 mb-8">
+        <div className="flex justify-between items-center min-h-11">
+          <h1 className="text-2xl font-bold text-gray-800">Organisms</h1>
+          {canManageOrganisms && (
+            <button
+              type="button"
+              onClick={() => setModal('new')}
+              className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
+            >
+              Add Organism
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="space-y-4">
       <div className="bg-white rounded-xl border border-mint-100 p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap gap-3 items-center">
           <input
@@ -238,6 +242,7 @@ export default function Organisms() {
           <p className="py-8 text-center text-gray-500">No organisms match your filters.</p>
         )}
       </div>
+      </div>
 
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -260,6 +265,7 @@ export default function Organisms() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
