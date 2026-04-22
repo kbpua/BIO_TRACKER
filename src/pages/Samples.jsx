@@ -96,7 +96,7 @@ export default function Samples() {
               <button
                 type="button"
                 onClick={handleExportCSV}
-                className="px-4 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
+                className="px-4 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50 hover:text-mint-800 dark:bg-slate-900 dark:border-mint-400/70 dark:text-mint-300 dark:hover:bg-mint-400/15 dark:hover:text-mint-200"
               >
                 Export CSV
               </button>
@@ -159,7 +159,7 @@ export default function Samples() {
         <button
           type="button"
           onClick={clearFilters}
-          className="text-sm text-mint-600 hover:text-mint-800 font-medium"
+          className="text-sm text-mint-700 hover:text-mint-800 dark:text-mint-300 dark:hover:text-mint-200 font-medium"
         >
           Clear Filters
         </button>

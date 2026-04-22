@@ -135,7 +135,7 @@ export default function UserManagement() {
                 </td>
                 <td className="py-2 px-4">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                    u.status === 'Active' ? 'bg-mint-100 text-mint-800' :
+                    u.status === 'Active' ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]' :
                     u.status === 'Pending' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
                   }`}>
                     {u.status}

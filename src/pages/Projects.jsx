@@ -656,7 +656,7 @@ export default function Projects() {
               <option value="Draft">Draft</option>
             </select>
           )}
-          <button type="button" onClick={clearFilters} className="text-sm text-mint-600 hover:text-mint-800 font-medium">
+          <button type="button" onClick={clearFilters} className="text-sm text-mint-700 hover:text-mint-800 dark:text-mint-300 dark:hover:text-mint-200 font-medium">
             Clear Filters
           </button>
         </div>
@@ -690,13 +690,18 @@ export default function Projects() {
                 <td className="py-2 px-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      p.status === 'Active' ? 'bg-mint-100 text-mint-800' :
-                      p.status === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                      p.status === 'Active'
+                        ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
+                        : p.status === 'Completed'
+                          ? 'bg-blue-200 text-[#0b3f3b] dark:bg-blue-200 dark:text-[#0b3f3b]'
+                          : 'bg-amber-200 text-[#0b3f3b] dark:bg-amber-200 dark:text-[#0b3f3b]'
                     }`}>
                       {p.status}
                     </span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      getProjectPublicationStatus(p) === 'Published' ? 'bg-mint-100 text-mint-800' : 'bg-orange-100 text-orange-800'
+                      getProjectPublicationStatus(p) === 'Published'
+                        ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
+                        : 'bg-orange-200 text-[#0b3f3b] dark:bg-orange-200 dark:text-[#0b3f3b]'
                     }`}>
                       {getProjectPublicationStatus(p)}
                     </span>

@@ -13,6 +13,7 @@ body,
 
 body {
   font-family: 'Poppins', system-ui, sans-serif;
+  transition: background-color 260ms ease, color 260ms ease;
 }
 
 /* Hide browser-native password reveal/clear controls; we use custom toggles */
@@ -26,4 +27,152 @@ input[type='password']::-webkit-credentials-auto-fill-button {
   pointer-events: none;
   position: absolute;
   right: 0;
+}
+
+html.dark,
+html.dark body,
+html.dark #root {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+html.dark * {
+  scrollbar-color: #475569 #1e293b;
+}
+
+html.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 999px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Shared dark-surface fallback for utility-heavy pages */
+html.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-gray-50,
+html.dark .bg-mint-50,
+html.dark .bg-mint-50\/80 {
+  background-color: #0f172a !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-gray-200,
+html.dark .border-gray-300,
+html.dark .border-mint-50,
+html.dark .border-mint-100,
+html.dark .border-mint-200 {
+  border-color: rgba(148, 163, 184, 0.32) !important;
+}
+
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-gray-600,
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* In dark mode, dark-teal text classes should render as lighter teal. */
+html.dark .text-mint-900,
+html.dark .text-mint-800,
+html.dark .text-mint-700,
+html.dark .text-teal-900,
+html.dark .text-teal-800,
+html.dark .text-teal-700 {
+  color: #5eead4 !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #14b8a6;
+}
+
+html.dark table thead {
+  background-color: #334155 !important;
+}
+
+html.dark table tbody tr {
+  background-color: #1e293b;
+}
+
+html.dark table tbody tr:nth-child(even) {
+  background-color: #263545;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #2b3b52 !important;
+}
+
+html.dark .bg-rose-50,
+html.dark .bg-rose-50\/90 {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+html.dark .border-rose-300,
+html.dark .border-rose-400 {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+}
+
+html.dark [class*='bg-red-600'] {
+  background-color: #dc2626 !important;
+}
+
+/* Recharts */
+html.dark .recharts-cartesian-grid-horizontal line,
+html.dark .recharts-cartesian-grid-vertical line {
+  stroke: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark .recharts-cartesian-axis-tick-value,
+html.dark .recharts-legend-item-text {
+  fill: #94a3b8 !important;
+}
+
+html.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1e293b !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  color: #f8fafc !important;
 }

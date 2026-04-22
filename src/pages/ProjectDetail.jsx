@@ -502,7 +502,7 @@ export default function ProjectDetail() {
     return (
       <div className="space-y-4">
         <p className="text-gray-500">Project not found.</p>
-        <Link to="/projects" className="text-mint-600 hover:underline">Back to Projects</Link>
+        <Link to="/projects" className="text-mint-600 dark:text-mint-300 hover:underline dark:hover:text-mint-400">Back to Projects</Link>
       </div>
     );
   }
@@ -512,7 +512,7 @@ export default function ProjectDetail() {
       <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
         <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
         <p className="text-gray-600">This project has not been published yet.</p>
-        <Link to="/projects" className="text-mint-600 font-medium hover:underline">Back to Projects</Link>
+        <Link to="/projects" className="text-mint-600 dark:text-mint-300 font-medium hover:underline dark:hover:text-mint-400">Back to Projects</Link>
       </div>
     );
   }
@@ -523,7 +523,7 @@ export default function ProjectDetail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/projects" className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <Link to="/projects" className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-200 dark:hover:text-slate-950">
           Back
         </Link>
       </div>
@@ -536,7 +536,7 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 onClick={() => setCoInviteModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-mint-200 bg-mint-50/80 text-mint-900 text-sm font-medium rounded-lg hover:bg-mint-100 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 border border-mint-300 bg-mint-100/90 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-200/90 dark:border-mint-400/70 dark:bg-mint-400/20 dark:text-mint-200 dark:hover:bg-mint-400/30 transition-colors"
               >
                 <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
                 Invite co-researchers
@@ -848,7 +848,7 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 onClick={handleExportProjectCsv}
-                className="px-3 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50"
+                className="px-3 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50 hover:text-mint-800 dark:bg-slate-900 dark:border-mint-400/70 dark:text-mint-300 dark:hover:bg-mint-400/15 dark:hover:text-mint-200"
               >
                 Export CSV
               </button>
@@ -891,7 +891,7 @@ export default function ProjectDetail() {
               <option value="">All Statuses</option>
               {uniqueStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <button type="button" onClick={clearFilters} className="text-sm text-mint-600 hover:text-mint-800 font-medium">
+            <button type="button" onClick={clearFilters} className="text-sm text-mint-700 hover:text-mint-800 dark:text-mint-300 dark:hover:text-mint-200 font-medium">
               Clear Filters
             </button>
           </div>

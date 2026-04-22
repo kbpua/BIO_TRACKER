@@ -349,7 +349,11 @@ export default function Notifications() {
                         className={`group relative flex items-stretch border-b border-slate-100 last:border-b-0 transition-all duration-200 ease-out ${
                           isRemoving ? 'opacity-0 -translate-x-1 scale-[0.98] pointer-events-none' : ''
                         } ${
-                          isSelected ? 'bg-teal-50/80 hover:bg-teal-50' : notification.isRead ? 'bg-white hover:bg-slate-50' : 'bg-teal-50/30 hover:bg-teal-50/50'
+                          isSelected
+                            ? 'bg-teal-50/80 hover:bg-teal-50'
+                            : notification.isRead
+                              ? 'bg-white hover:bg-slate-50 border-l-2 border-l-transparent'
+                              : 'bg-teal-100/35 hover:bg-teal-100/55 border-l-2 border-l-teal-400 dark:bg-teal-300/10 dark:hover:bg-teal-300/15 dark:border-l-teal-300'
                         }`}
                       >
                         <label

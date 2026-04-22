@@ -21,7 +21,7 @@ function EduCard({ title, icon: Icon, children, headerClass }) {
             <Icon className="h-5 w-5" strokeWidth={2} />
           </span>
         ) : null}
-        <h3 className="font-semibold text-gray-800">{title}</h3>
+        <h3 className="font-semibold text-current">{title}</h3>
       </div>
       <div className="p-4 text-sm text-gray-700 leading-relaxed">
         {children}
@@ -59,7 +59,7 @@ export default function SampleDetail() {
     return (
       <div className="space-y-4">
         <p className="text-gray-500">Sample not found.</p>
-        <Link to="/samples" className="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <Link to="/samples" className="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-200 dark:hover:text-slate-950">
           Back to Samples
         </Link>
       </div>
@@ -71,7 +71,7 @@ export default function SampleDetail() {
       <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
         <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
         <p className="text-gray-600">This sample belongs to a project that has not been published yet.</p>
-        <Link to="/samples" className="text-mint-600 font-medium hover:underline">Back to Samples</Link>
+        <Link to="/samples" className="text-mint-600 dark:text-mint-300 font-medium hover:underline dark:hover:text-mint-400">Back to Samples</Link>
       </div>
     );
   }
@@ -81,7 +81,7 @@ export default function SampleDetail() {
       <div className="flex items-center gap-4">
         <Link
           to="/samples"
-          className="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-200 dark:hover:text-slate-950"
         >
           Back
         </Link>
@@ -116,7 +116,7 @@ export default function SampleDetail() {
         <EduCard
           title="About the Organism"
           icon={Dna}
-          headerClass="bg-mint-100 text-mint-900"
+          headerClass="bg-mint-100 text-[#0b3f3b]"
         >
           {organismContent ? (
             <>
@@ -132,7 +132,7 @@ export default function SampleDetail() {
         <EduCard
           title="About the Sample Type"
           icon={FlaskConical}
-          headerClass="bg-sky-100 text-sky-900"
+          headerClass="bg-sky-100 text-sky-950"
         >
           {sampleTypeContent ? <p>{sampleTypeContent}</p> : <p>{FALLBACK_MESSAGE}</p>}
         </EduCard>
@@ -140,7 +140,7 @@ export default function SampleDetail() {
         <EduCard
           title="About the Disease"
           icon={Stethoscope}
-          headerClass="bg-amber-100 text-amber-900"
+          headerClass="bg-amber-100 text-amber-950"
         >
           {diseaseContent ? <p>{diseaseContent}</p> : <p>{FALLBACK_MESSAGE}</p>}
         </EduCard>
@@ -148,7 +148,7 @@ export default function SampleDetail() {
         <EduCard
           title="About the Study Purpose"
           icon={Microscope}
-          headerClass="bg-violet-100 text-violet-900"
+          headerClass="bg-violet-100 text-violet-950"
         >
           {studyPurposeContent ? <p>{studyPurposeContent}</p> : <p>{FALLBACK_MESSAGE}</p>}
         </EduCard>

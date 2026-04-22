@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const REGISTER_ROLES = ['Researcher', 'Student'];
 
@@ -50,6 +51,7 @@ function GoogleLogo() {
 }
 
 export default function Login() {
+  const { isDark, toggleTheme } = useTheme();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -242,10 +244,28 @@ export default function Login() {
 
   if (processingOAuth || isHydratingSession) {
     return (
-      <div className="min-h-screen bg-mint-50 flex items-center justify-center p-6 font-sans">
+      <div className="min-h-screen bg-mint-50 dark:bg-slate-900 flex items-center justify-center p-6 font-sans transition-colors duration-300">
+        <div className="fixed top-4 right-4 z-20 md:right-6">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="h-11 w-11 rounded-full border border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 dark:border-slate-600 dark:bg-slate-800 dark:text-teal-200 dark:hover:bg-teal-400/45 dark:hover:border-teal-300 transition-colors duration-300 inline-flex items-center justify-center"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+        </div>
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-lg border border-mint-100 p-8 text-center">
-            <h1 className="text-2xl font-bold text-mint-800 mb-2">BioSample Tracker</h1>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-mint-100 dark:border-slate-700 p-8 text-center transition-colors duration-300">
+            <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-white dark:bg-slate-700 ring-1 ring-mint-200 dark:ring-slate-600 overflow-hidden">
+              <img
+                src={isDark ? '/logo-dark.png' : '/logo.png'}
+                alt="BioSample Tracker logo"
+                className={`h-9 w-9 object-contain ${isDark ? 'scale-125' : ''}`}
+              />
+            </div>
+            <h1 className="text-2xl font-bold text-mint-800 dark:text-mint-300 mb-2">BioSample Tracker</h1>
             <p className="text-gray-500 text-sm">Signing you in with Google...</p>
           </div>
         </div>
@@ -254,10 +274,30 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-mint-50 flex items-center justify-center p-6 font-sans">
+    <div className="min-h-screen bg-mint-50 dark:bg-slate-900 flex items-center justify-center p-6 font-sans transition-colors duration-300">
+      <div className="fixed top-4 right-4 z-20 md:right-6">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="h-11 w-11 rounded-full border border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 dark:border-slate-600 dark:bg-slate-800 dark:text-teal-200 dark:hover:bg-teal-400/45 dark:hover:border-teal-300 transition-colors duration-300 inline-flex items-center justify-center"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+      </div>
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-lg border border-mint-100 p-8">
-          <h1 className="text-2xl font-bold text-mint-800 text-center mb-2">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-mint-100 dark:border-slate-700 p-8 transition-colors duration-300">
+          <div className="mb-3 flex justify-center">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white dark:bg-slate-700 ring-1 ring-mint-200 dark:ring-slate-600 overflow-hidden">
+              <img
+                src={isDark ? '/logo-dark.png' : '/logo.png'}
+                alt="BioSample Tracker logo"
+                className={`h-9 w-9 object-contain ${isDark ? 'scale-125' : ''}`}
+              />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-mint-800 dark:text-mint-300 text-center mb-2">
             BioSample Tracker
           </h1>
           <p className="text-gray-500 text-center text-sm mb-4">
@@ -285,14 +325,14 @@ export default function Login() {
             <button
               type="button"
               onClick={() => { setMode('login'); setError(''); setSuccessMessage(''); clearAuthBlockedMessage(); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'login' ? 'bg-white text-mint-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'login' ? 'bg-white text-mint-800 dark:text-mint-300 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Login
             </button>
             <button
               type="button"
               onClick={() => { setMode('register'); setError(''); setSuccessMessage(''); clearAuthBlockedMessage(); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'register' ? 'bg-white text-mint-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'register' ? 'bg-white text-mint-800 dark:text-mint-300 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Register
             </button>
@@ -376,7 +416,7 @@ export default function Login() {
                 </div>
               )}
               {successMessage && (
-                <div className="p-3 rounded-lg bg-mint-50 text-mint-800 text-sm border border-mint-200">
+                <div className="p-3 rounded-lg bg-mint-50 text-mint-800 dark:text-mint-300 text-sm border border-mint-200">
                   {successMessage}
                 </div>
               )}

@@ -246,7 +246,7 @@ export default function CreateUser() {
         </div>
       )}
       {isSupabaseAuth && (
-        <div className="mb-4 p-3 rounded-lg text-sm bg-amber-50 text-amber-800 border border-amber-200">
+        <div className="mb-4 p-3 rounded-lg text-sm bg-amber-50 text-amber-950 border border-amber-200">
           In Supabase mode, create users through the Register screen so Auth credentials are created correctly.
         </div>
       )}

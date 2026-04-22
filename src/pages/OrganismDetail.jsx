@@ -80,7 +80,7 @@ export default function OrganismDetail() {
     return (
       <div className="space-y-4">
         <p className="text-gray-500">Organism not found.</p>
-        <Link to="/organisms" className="text-mint-600 hover:underline">Back to Organisms</Link>
+        <Link to="/organisms" className="text-mint-600 dark:text-mint-300 hover:underline dark:hover:text-mint-400">Back to Organisms</Link>
       </div>
     );
   }
@@ -88,7 +88,7 @@ export default function OrganismDetail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/organisms" className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <Link to="/organisms" className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-200 dark:hover:text-slate-950">
           Back
         </Link>
       </div>

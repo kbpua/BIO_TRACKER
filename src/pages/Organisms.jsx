@@ -196,7 +196,7 @@ export default function Organisms() {
               <option key={k} value={k}>{k}</option>
             ))}
           </select>
-          <button type="button" onClick={clearFilters} className="text-sm text-mint-600 hover:text-mint-800 font-medium">
+          <button type="button" onClick={clearFilters} className="text-sm text-mint-700 hover:text-mint-800 dark:text-mint-300 dark:hover:text-mint-200 font-medium">
             Clear Filters
           </button>
         </div>

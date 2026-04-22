@@ -29,12 +29,12 @@ function StatCard({ label, value, tone = 'mint' }) {
     rose: 'border-rose-300 bg-rose-100 shadow-sm shadow-rose-900/5',
   };
   const labelStyles = {
-    mint: 'text-white/85',
+    mint: 'text-white/85 dark:bg-gradient-to-r dark:from-[#0A4F4B] dark:to-[#0F766E] dark:bg-clip-text dark:text-transparent',
     amber: 'text-amber-900/80',
     rose: 'text-rose-900/80',
   };
   const valueStyles = {
-    mint: 'text-white',
+    mint: 'text-white dark:bg-gradient-to-r dark:from-[#0A4F4B] dark:to-[#0F766E] dark:bg-clip-text dark:text-transparent',
     amber: 'text-amber-950',
     rose: 'text-rose-950',
   };
@@ -49,21 +49,40 @@ function StatCard({ label, value, tone = 'mint' }) {
 
 function ActionCard({ title, count, to, detail, tone = 'mint' }) {
   const toneStyles = {
-    mint: 'border-mint-200 hover:border-mint-300 hover:bg-mint-50/60',
+    mint: 'border-mint-200 hover:border-mint-300 hover:bg-mint-50/60 dark:border-slate-500 dark:bg-slate-800/55 dark:hover:bg-slate-200/90',
     amber: 'border-amber-300 bg-amber-50/90 hover:border-amber-400 hover:bg-amber-100',
-    rose: 'border-rose-300 bg-rose-50/90 hover:border-rose-400 hover:bg-rose-100',
+    rose: 'border-rose-300 bg-rose-50/90 hover:border-rose-400 hover:bg-rose-100 dark:border-rose-400/70 dark:bg-rose-900/50 dark:hover:bg-rose-900/65',
   };
+  const textStyles = {
+    mint: {
+      title: 'text-gray-900 dark:text-slate-100 group-hover:dark:text-slate-950',
+      detail: 'text-gray-500 dark:text-slate-300 group-hover:dark:text-slate-800',
+      count: 'text-gray-900 dark:text-slate-100 group-hover:dark:text-slate-950',
+    },
+    // Keep warning card text darker in dark mode for contrast against amber surface.
+    amber: {
+      title: 'text-amber-950 dark:text-amber-950',
+      detail: 'text-amber-900/80 dark:text-amber-900',
+      count: 'text-amber-950 dark:text-amber-950',
+    },
+    rose: {
+      title: 'text-rose-900 dark:text-rose-50',
+      detail: 'text-rose-800/80 dark:text-rose-100',
+      count: 'text-rose-900 dark:text-rose-50',
+    },
+  };
+  const toneText = textStyles[tone] || textStyles.mint;
   return (
     <Link
       to={to}
-      className={`rounded-xl border p-4 shadow-sm transition-colors ${toneStyles[tone] || toneStyles.mint}`}
+      className={`group rounded-xl border p-4 shadow-sm transition-colors ${toneStyles[tone] || toneStyles.mint}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-gray-900">{title}</p>
-          <p className="text-xs text-gray-500 mt-1">{detail}</p>
+          <p className={`text-sm font-semibold ${toneText.title}`}>{title}</p>
+          <p className={`text-xs mt-1 ${toneText.detail}`}>{detail}</p>
         </div>
-        <span className="text-2xl font-bold text-gray-900">{count}</span>
+        <span className={`text-2xl font-bold ${toneText.count}`}>{count}</span>
       </div>
     </Link>
   );
@@ -765,15 +784,19 @@ export default function Dashboard() {
           </section>
 
           <section className="bg-white rounded-xl border border-mint-100 shadow-sm overflow-hidden">
-            <h3 className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-mint-100">Recent Activity</h3>
-            <ul className="divide-y divide-mint-50">
-              {recentActivity.map((item) => {
+            <h3 className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-mint-100 dark:border-slate-700/60">Recent Activity</h3>
+            <ul>
+              {recentActivity.map((item, idx) => {
                 const parts = splitActivityText(item.text);
                 return (
                   <li key={item.id}>
                     <Link
                       to={activityLink(item.text, isAdmin)}
-                      className="px-4 py-2.5 text-sm flex items-center justify-between gap-3 hover:bg-mint-50/60"
+                      className={`px-4 py-2.5 text-sm flex items-center justify-between gap-3 border-b border-mint-50 last:border-b-0 dark:border-slate-700/60 hover:bg-mint-50/70 dark:hover:bg-slate-800/80 ${
+                        idx % 2 === 0
+                          ? 'bg-white dark:bg-slate-800/40'
+                          : 'bg-mint-50/35 dark:bg-slate-800/70'
+                      }`}
                     >
                       <span className="min-w-0">
                         <span className="font-medium text-gray-800">{parts.actor}</span>
@@ -906,7 +929,9 @@ export default function Dashboard() {
                     </td>
                     <td className="py-2.5 px-4">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        project.role === 'Lead' ? 'bg-mint-100 text-mint-800' : 'bg-blue-100 text-blue-800'
+                        project.role === 'Lead'
+                          ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
+                          : 'bg-blue-200 text-[#0b3f3b] dark:bg-blue-200 dark:text-[#0b3f3b]'
                       }`}>
                         {project.role}
                       </span>
@@ -937,15 +962,19 @@ export default function Dashboard() {
           </section>
 
           <section className="bg-white rounded-xl border border-mint-100 shadow-sm overflow-hidden">
-            <h3 className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-mint-100">Recent Activity</h3>
-            <ul className="divide-y divide-mint-50">
-              {researcherRelevantActivity.slice(0, 5).map((item) => {
+            <h3 className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-mint-100 dark:border-slate-700/60">Recent Activity</h3>
+            <ul>
+              {researcherRelevantActivity.slice(0, 5).map((item, idx) => {
                 const parts = splitActivityText(item.text);
                 return (
                   <li key={item.id}>
                     <Link
                       to={activityLink(item.text, false)}
-                      className="px-4 py-2.5 text-sm flex items-center justify-between gap-3 hover:bg-mint-50/60"
+                      className={`px-4 py-2.5 text-sm flex items-center justify-between gap-3 border-b border-mint-50 last:border-b-0 dark:border-slate-700/60 hover:bg-mint-50/70 dark:hover:bg-slate-800/80 ${
+                        idx % 2 === 0
+                          ? 'bg-white dark:bg-slate-800/40'
+                          : 'bg-mint-50/35 dark:bg-slate-800/70'
+                      }`}
                     >
                       <span className="min-w-0">
                         <span className="font-medium text-gray-800">{parts.actor}</span>
@@ -1016,7 +1045,7 @@ export default function Dashboard() {
                 <p className="text-xs text-white/65 mt-1">Samples: {project.sampleCount}</p>
                 <Link
                   to={`/projects/${project.id}`}
-                  className="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-white text-mint-800 text-xs font-semibold hover:bg-mint-50 transition-colors"
+                  className="inline-flex mt-3 px-3 py-1.5 rounded-lg bg-white text-mint-800 text-xs font-semibold hover:bg-mint-50 transition-colors dark:bg-slate-900 dark:text-mint-200 dark:hover:bg-mint-400/15 dark:hover:text-mint-100"
                 >
                   View Project
                 </Link>
@@ -1025,15 +1054,19 @@ export default function Dashboard() {
           </section>
 
           <section className="bg-white rounded-xl border border-mint-100 shadow-sm overflow-hidden">
-            <h3 className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-mint-100">Recent Activity</h3>
-            <ul className="divide-y divide-mint-50">
-              {studentDiscoveryActivity.slice(0, 3).map((item) => {
+            <h3 className="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-mint-100 dark:border-slate-700/60">Recent Activity</h3>
+            <ul>
+              {studentDiscoveryActivity.slice(0, 3).map((item, idx) => {
                 const parts = splitActivityText(item.text);
                 return (
                   <li key={item.id}>
                     <Link
                       to={activityLink(item.text, false)}
-                      className="px-4 py-2.5 text-sm flex items-center justify-between gap-3 hover:bg-mint-50/60"
+                      className={`px-4 py-2.5 text-sm flex items-center justify-between gap-3 border-b border-mint-50 last:border-b-0 dark:border-slate-700/60 hover:bg-mint-50/70 dark:hover:bg-slate-800/80 ${
+                        idx % 2 === 0
+                          ? 'bg-white dark:bg-slate-800/40'
+                          : 'bg-mint-50/35 dark:bg-slate-800/70'
+                      }`}
                     >
                       <span className="min-w-0">
                         <span className="font-medium text-gray-800">{parts.actor}</span>

@@ -13,9 +13,12 @@ import {
   LogOut,
   Trash2,
   X,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { formatRelativeTime, getNotificationMeta } from '../utils/notifications';
 
 const navItem = (to, label, description, Icon) => ({ to, label, description, Icon });
@@ -31,6 +34,7 @@ function getUserInitials(fullName) {
 
 export function Layout({ children }) {
   const { user, logout, isAdmin } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const {
     notifications,
     unreadCount,
@@ -216,7 +220,7 @@ export function Layout({ children }) {
   };
 
   return (
-    <div className="h-screen bg-mint-50/80 flex font-sans overflow-hidden">
+    <div className="h-screen bg-mint-50/80 dark:bg-slate-900 flex font-sans overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
@@ -234,7 +238,7 @@ export function Layout({ children }) {
             setIsHovered(false);
           }
         }}
-        className={`fixed z-40 left-3 top-3 bottom-3 md:left-4 md:top-4 md:bottom-4 rounded-3xl overflow-hidden bg-mint-800 bg-gradient-to-b from-[#0F766E] to-[#115E59] border border-white/10 shadow-[0_10px_28px_rgba(15,118,110,0.22)] flex flex-col shrink-0 transition-[width] duration-300 ease-out ${
+        className={`fixed z-40 left-3 top-3 bottom-3 md:left-4 md:top-4 md:bottom-4 rounded-3xl overflow-hidden bg-mint-800 bg-gradient-to-b from-[#0F766E] to-[#115E59] border border-white/10 shadow-[0_10px_28px_rgba(0,0,0,0.4)] flex flex-col shrink-0 transition-[width] duration-300 ease-out ${
           isExpanded ? 'w-[272px]' : 'w-[78px]'
         }`}
       >
@@ -242,7 +246,11 @@ export function Layout({ children }) {
           <div className={`rounded-xl border border-white/15 bg-white/[0.08] backdrop-blur-sm ${isExpanded ? 'p-3' : 'p-2.5'} transition-all duration-300`}>
             <div className="flex items-center justify-between">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ring-2 ring-white/35 overflow-hidden">
-                <img src="/logo.png" alt="BioSample Tracker logo" className="h-7 w-7 object-contain" />
+                <img
+                  src={isDark ? '/logo-dark.png' : '/logo.png'}
+                  alt="BioSample Tracker logo"
+                  className={`h-7 w-7 object-contain ${isDark ? 'scale-125' : ''}`}
+                />
               </div>
               {isExpanded && (
                 <button
@@ -341,7 +349,7 @@ export function Layout({ children }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 pl-[98px] md:pl-[114px]">
-        <main className="flex-1 overflow-auto relative px-6 pt-4 pb-6 pr-24 md:pr-28">
+        <main className="flex-1 overflow-auto relative px-6 pt-4 pb-6 pr-24 md:pr-28 transition-colors duration-300">
           {/* Toast notifications (upper-right) */}
           {toasts.length > 0 && (
             <div className="fixed top-20 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] space-y-3 pointer-events-none">
@@ -389,7 +397,7 @@ export function Layout({ children }) {
                 <button
                   type="button"
                   onClick={() => setShowNotificationPanel(true)}
-                  className={`relative h-11 w-11 rounded-full border border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 transition-colors ${
+                  className={`relative h-11 w-11 rounded-full border border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-teal-400/45 dark:hover:border-teal-300 transition-colors duration-300 ${
                     newArrivalPulse ? 'animate-pulse' : ''
                   }`}
                   aria-label="Notifications"
@@ -404,6 +412,17 @@ export function Layout({ children }) {
                 </button>
               </div>
             )}
+            <div className="fixed top-[4.5rem] right-4 z-[999] pointer-events-auto md:right-6">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="h-11 w-11 rounded-full border border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 dark:border-slate-600 dark:bg-slate-800 dark:text-teal-200 dark:hover:bg-teal-400/45 dark:hover:border-teal-300 transition-colors duration-300 inline-flex items-center justify-center"
+                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+            </div>
 
             {showNotificationPanel && (
               <div
@@ -463,8 +482,10 @@ export function Layout({ children }) {
                       return (
                         <div
                           key={n.notificationId}
-                          className={`group relative flex items-stretch border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors ${
-                            n.isRead ? 'bg-white' : 'bg-teal-50/40'
+                          className={`group relative flex items-stretch border-b border-slate-100 last:border-b-0 transition-colors ${
+                            n.isRead
+                              ? 'bg-white hover:bg-slate-50 border-l-2 border-l-transparent'
+                              : 'bg-teal-100/35 hover:bg-teal-100/55 border-l-2 border-l-teal-400 dark:bg-teal-300/10 dark:hover:bg-teal-300/15 dark:border-l-teal-300'
                           }`}
                         >
                           <button
