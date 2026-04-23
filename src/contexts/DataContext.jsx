@@ -33,12 +33,15 @@ function mapPendingRequestType(type) {
 function mapPendingRequestFromDb(r) {
   const resRaw = r.resolution;
   const resolution = resRaw != null && String(resRaw).trim() !== '' ? String(resRaw).trim() : null;
+  const statusRaw = r.status;
+  const status = statusRaw != null && String(statusRaw).trim() !== '' ? String(statusRaw).trim() : null;
   return {
     id: r.id,
     projectId: r.project_id,
     type: mapPendingRequestType(r.type),
     requestedBy: r.requested_by,
     requestedByUserId: r.requested_by_user_id || null,
+    status,
     resolution,
     resolvedAt: r.resolved_at || null,
     sampleRecordId: r.sample_record_id,
@@ -876,8 +879,9 @@ export function DataProvider({ children }) {
     invitedToList,
   }) => {
     let created = null;
+    let duplicateFound = false;
     const cleanInvitedToList = [...new Set((invitedToList || []).filter(Boolean))];
-    if (cleanInvitedToList.length === 0) return null;
+    if (cleanInvitedToList.length === 0) return { ok: false, reason: 'empty' };
 
     let invitedToUserIds = cleanInvitedToList.map(() => null);
     if (supabaseEnabled && supabase) {
@@ -918,10 +922,16 @@ export function DataProvider({ children }) {
         && r.proposedUpdates.invitedToList.length === cleanInvitedToList.length
         && r.proposedUpdates.invitedToList.every((name) => cleanInvitedToList.includes(name))
       ));
-      if (dup) return prev;
+      if (dup) {
+        duplicateFound = true;
+        return prev;
+      }
       created = req;
       return [req, ...prev];
     });
+    if (!created) {
+      return { ok: false, reason: duplicateFound ? 'duplicate' : 'unknown' };
+    }
     if (created && supabaseEnabled && supabase) {
       const row = {
         id: created.id,
@@ -937,21 +947,23 @@ export function DataProvider({ children }) {
         const { requested_by_user_id: _omit, ...rest } = row;
         ({ error } = await supabase.from('pending_requests').insert(rest));
       }
-      if (error) console.error('Failed to save co-researcher invite request:', error.message);
+      if (error) {
+        console.error('Failed to save co-researcher invite request:', error.message);
+        setPendingRequests((prev) => prev.filter((r) => r.id !== created.id));
+        return { ok: false, reason: 'error', error: error.message };
+      }
     }
-    if (created) {
-      const project = projects.find((p) => p.id === projectId);
-      createRoleNotification({
-        role: 'Admin',
-        type: 'APPROVAL_REQUEST',
-        title: 'Co-Researcher Assignment Request',
-        description: `${requestedBy} wants to add ${cleanInvitedToList.join(', ')} to ${project?.name || projectId}. Awaiting your approval.`,
-        linkTo: '/projects',
-        targetEntity: 'project',
-        targetId: projectId,
-      });
-    }
-    return created;
+    const project = projects.find((p) => p.id === projectId);
+    createRoleNotification({
+      role: 'Admin',
+      type: 'APPROVAL_REQUEST',
+      title: 'Co-Researcher Assignment Request',
+      description: `${requestedBy} wants to add ${cleanInvitedToList.join(', ')} to ${project?.name || projectId}. Awaiting your approval.`,
+      linkTo: '/projects',
+      targetEntity: 'project',
+      targetId: projectId,
+    });
+    return { ok: true, reason: 'created', request: created };
   }, [createRoleNotification, mapProfileRow, projects, supabase, supabaseEnabled, user?.authId, users]);
 
   const createCoResearcherInvites = useCallback(async ({

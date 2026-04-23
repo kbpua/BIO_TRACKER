@@ -273,12 +273,14 @@ export default function ProjectDetail() {
           requestedBy: user?.fullName || 'Unknown',
           invitedToList: inviteAdded,
         });
-        if (!created) {
+        if (!created?.ok) {
           shouldCloseModal = false;
           try {
             window.dispatchEvent(new CustomEvent('biosample_flash', {
               detail: {
-                message: 'A matching co-researcher invite request is already pending admin approval.',
+                message: created?.reason === 'duplicate'
+                  ? 'A matching co-researcher invite request is already pending admin approval.'
+                  : 'Could not submit one or more co-researcher requests. Please try again.',
                 variant: 'error',
               },
             }));

@@ -18,8 +18,9 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
-import { isPendingCoResearcherInviteForUser, normalizePersonName, projectsPendingCoResearcherInvitesPath } from '../utils/personName';
+import { isPendingCoResearcherInviteForUser, projectsPendingCoResearcherInvitesPath } from '../utils/personName';
 
 function StatCard({ label, value, tone = 'mint' }) {
   const cardStyles = {
@@ -48,28 +49,52 @@ function StatCard({ label, value, tone = 'mint' }) {
 }
 
 function ActionCard({ title, count, to, detail, tone = 'mint' }) {
+  const hasAlert = Number(count) > 0;
   const toneStyles = {
-    mint: 'border-mint-200 hover:border-mint-300 hover:bg-mint-50/60 dark:border-slate-500 dark:bg-slate-800/55 dark:hover:bg-slate-200/90',
-    amber: 'border-amber-300 bg-amber-50/90 hover:border-amber-400 hover:bg-amber-100',
-    rose: 'border-rose-300 bg-rose-50/90 hover:border-rose-400 hover:bg-rose-100 dark:border-rose-400/70 dark:bg-rose-900/50 dark:hover:bg-rose-900/65',
+    mint: hasAlert
+      ? 'border-mint-200 hover:border-mint-300 hover:bg-mint-50/60 dark:border-teal-400/50 dark:bg-teal-900/30 dark:hover:bg-teal-900/45 dark:border-l-4 dark:border-l-teal-400'
+      : 'border-mint-200 hover:border-mint-300 hover:bg-mint-50/60 dark:border-slate-600 dark:bg-slate-800/55 dark:hover:bg-slate-800/75',
+    amber: hasAlert
+      ? 'border-amber-300 bg-amber-50/90 hover:border-amber-400 hover:bg-amber-100 dark:border-teal-400/50 dark:bg-teal-900/30 dark:hover:bg-teal-900/45 dark:border-l-4 dark:border-l-teal-400'
+      : 'border-amber-300 bg-amber-50/90 hover:border-amber-400 hover:bg-amber-100 dark:border-slate-600 dark:bg-slate-800/55 dark:hover:bg-slate-800/75',
+    rose: hasAlert
+      ? 'border-rose-300 bg-rose-50/90 hover:border-rose-400 hover:bg-rose-100 dark:border-rose-400/70 dark:bg-rose-950/40 dark:hover:bg-rose-950/55 dark:border-l-4 dark:border-l-rose-400'
+      : 'border-rose-300 bg-rose-50/90 hover:border-rose-400 hover:bg-rose-100 dark:border-slate-600 dark:bg-slate-800/55 dark:hover:bg-slate-800/75',
   };
   const textStyles = {
-    mint: {
-      title: 'text-gray-900 dark:text-slate-100 group-hover:dark:text-slate-950',
-      detail: 'text-gray-500 dark:text-slate-300 group-hover:dark:text-slate-800',
-      count: 'text-gray-900 dark:text-slate-100 group-hover:dark:text-slate-950',
-    },
-    // Keep warning card text darker in dark mode for contrast against amber surface.
-    amber: {
-      title: 'text-amber-950 dark:text-amber-950',
-      detail: 'text-amber-900/80 dark:text-amber-900',
-      count: 'text-amber-950 dark:text-amber-950',
-    },
-    rose: {
-      title: 'text-rose-900 dark:text-rose-50',
-      detail: 'text-rose-800/80 dark:text-rose-100',
-      count: 'text-rose-900 dark:text-rose-50',
-    },
+    mint: hasAlert
+      ? {
+          title: 'text-gray-900 dark:text-teal-100',
+          detail: 'text-gray-500 dark:text-slate-200',
+          count: 'text-gray-900 dark:text-teal-200',
+        }
+      : {
+          title: 'text-gray-900 dark:text-slate-200',
+          detail: 'text-gray-500 dark:text-slate-400',
+          count: 'text-gray-900 dark:text-slate-200',
+        },
+    amber: hasAlert
+      ? {
+          title: 'text-amber-950 dark:text-teal-100',
+          detail: 'text-amber-900/80 dark:text-slate-200',
+          count: 'text-amber-950 dark:text-teal-200',
+        }
+      : {
+          title: 'text-amber-950 dark:text-slate-200',
+          detail: 'text-amber-900/80 dark:text-slate-400',
+          count: 'text-amber-950 dark:text-slate-200',
+        },
+    rose: hasAlert
+      ? {
+          title: 'text-rose-900 dark:text-rose-100',
+          detail: 'text-rose-800/80 dark:text-slate-200',
+          count: 'text-rose-900 dark:text-rose-300',
+        }
+      : {
+          title: 'text-rose-900 dark:text-slate-200',
+          detail: 'text-rose-800/80 dark:text-slate-400',
+          count: 'text-rose-900 dark:text-slate-200',
+        },
   };
   const toneText = textStyles[tone] || textStyles.mint;
   return (
@@ -95,30 +120,71 @@ const STATUS_COLORS = {
   Contaminated: '#ef4444',
 };
 
+function ChartTooltipContent({ active, payload, label, isDark, formatValue, hideLabel = false }) {
+  if (!active || !payload?.length) return null;
+  const bg = isDark ? '#1E293B' : '#FFFFFF';
+  const border = isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #E5E7EB';
+  const labelColor = isDark ? '#F1F5F9' : '#1F2937';
+  const valueColor = isDark ? '#2DD4BF' : '#0F766E';
+  const secondaryColor = isDark ? '#94A3B8' : '#6B7280';
+
+  return (
+    <div
+      style={{
+        backgroundColor: bg,
+        border,
+        borderRadius: 8,
+        padding: '10px 12px',
+        boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 4px 12px rgba(0,0,0,0.1)',
+      }}
+    >
+      {!hideLabel && label != null && (
+        <p style={{ color: labelColor, fontWeight: 600, marginBottom: 4, fontSize: 12 }}>{String(label)}</p>
+      )}
+      {payload.map((entry, idx) => {
+        const name = String(entry?.name ?? entry?.dataKey ?? 'Value');
+        const value = entry?.value;
+        const rendered = typeof formatValue === 'function' ? formatValue(value, name, entry) : String(value);
+        return (
+          <p key={`${name}-${idx}`} style={{ color: valueColor, fontSize: 13, margin: 0 }}>
+            <span style={{ color: secondaryColor }}>{name}:</span> {rendered}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Donut chart for sample status with tooltips, total summary above chart, and legend tags (counts + %). */
-function SampleStatusPie({ data, emptyLabel = 'No sample status data.' }) {
+function SampleStatusPie({ data, emptyLabel = 'No sample status data.', isDark = false }) {
   const total = (data || []).reduce((sum, d) => sum + (Number(d.value) || 0), 0);
   if (!data || data.length === 0 || total === 0) {
-    return <p className="text-sm text-gray-500 min-h-[14rem] flex items-center justify-center">{emptyLabel}</p>;
+    return <p className="text-sm text-gray-500 dark:text-slate-400 min-h-[14rem] flex items-center justify-center">{emptyLabel}</p>;
   }
 
   const rows = [...data].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0));
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-right text-sm text-gray-600">
-        <span className="text-2xl font-bold tabular-nums text-gray-900">{total}</span>
-        <span className="ml-1.5 text-xs font-medium text-gray-500">total samples</span>
+      <p className="text-right text-sm text-gray-600 dark:text-slate-400">
+        <span className="text-2xl font-bold tabular-nums text-gray-900 dark:text-slate-100">{total}</span>
+        <span className="ml-1.5 text-xs font-medium text-gray-500 dark:text-slate-400">total samples</span>
       </p>
       <div className="h-48 w-full min-h-[12rem]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
             <Tooltip
-              formatter={(value, name) => {
-                const n = Number(value);
-                const pct = total ? ((n / total) * 100).toFixed(1) : '0';
-                return [`${n} sample${n === 1 ? '' : 's'} (${pct}%)`, String(name)];
-              }}
+              content={(
+                <ChartTooltipContent
+                  isDark={isDark}
+                  hideLabel
+                  formatValue={(value) => {
+                    const n = Number(value);
+                    const pct = total ? ((n / total) * 100).toFixed(1) : '0';
+                    return `${n} sample${n === 1 ? '' : 's'} (${pct}%)`;
+                  }}
+                />
+              )}
             />
             <Pie
               data={data}
@@ -137,7 +203,7 @@ function SampleStatusPie({ data, emptyLabel = 'No sample status data.' }) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="flex flex-wrap justify-center gap-2 border-t border-mint-100 pt-3" aria-label="Sample status breakdown">
+      <ul className="flex flex-wrap justify-center gap-2 border-t border-mint-100 dark:border-slate-700/70 pt-3" aria-label="Sample status breakdown">
         {rows.map((d) => {
           const v = Number(d.value) || 0;
           const pct = (v / total) * 100;
@@ -145,17 +211,17 @@ function SampleStatusPie({ data, emptyLabel = 'No sample status data.' }) {
           return (
             <li
               key={d.name}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs shadow-sm"
+              className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-slate-600/80 bg-gray-50 dark:bg-slate-800/60 px-2.5 py-1 text-xs shadow-sm"
             >
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-sm ring-1 ring-black/10"
                 style={{ backgroundColor: fill }}
                 aria-hidden
               />
-              <span className="font-semibold text-gray-800">{d.name}</span>
-              <span className="tabular-nums text-gray-600">
+              <span className="font-semibold text-gray-800 dark:text-slate-200">{d.name}</span>
+              <span className="tabular-nums text-gray-600 dark:text-slate-300">
                 {v}
-                <span className="text-gray-400"> ({pct.toFixed(1)}%)</span>
+                <span className="text-gray-400 dark:text-slate-400"> ({pct.toFixed(1)}%)</span>
               </span>
             </li>
           );
@@ -212,6 +278,7 @@ function activityLink(text, isAdmin) {
 
 export default function Dashboard() {
   const { user, isAdmin, isResearcher, isStudent } = useAuth();
+  const { isDark } = useTheme();
   const {
     samples,
     projects,
@@ -221,9 +288,6 @@ export default function Dashboard() {
     pendingCount,
     pendingRequests,
     coResearcherInvites,
-    approvePendingRequest,
-    rejectPendingRequest,
-    addActivity,
   } = useData();
 
   const visibleProjects = useMemo(
@@ -283,48 +347,6 @@ export default function Dashboard() {
     [pendingRequests]
   );
 
-  const enqueueToastForUser = (fullName, payload) => {
-    if (!fullName) return;
-    const key = `biosample_toast_queue:${fullName}`;
-    try {
-      const raw = sessionStorage.getItem(key);
-      const prev = raw ? JSON.parse(raw) : [];
-      const arr = Array.isArray(prev) ? prev : [];
-      sessionStorage.setItem(key, JSON.stringify([...arr, payload]));
-    } catch { /* ignore */ }
-  };
-
-  const handleApproveCoResearcherRequest = (req) => {
-    const approved = approvePendingRequest(req.id);
-    if (!approved) return;
-    const invitees = Array.isArray(approved.proposedUpdates?.invitedToList) ? approved.proposedUpdates.invitedToList : [];
-    const proj = projects.find((p) => p.id === approved.projectId);
-    const approverMsg = invitees.length > 0
-      ? `Co-researcher invite request approved. Invites sent to: ${invitees.join(', ')}.`
-      : 'Co-researcher invite request approved.';
-    const requesterMsg = invitees.length > 0
-      ? `Admin approved your co-researcher request for ${proj?.name || approved.projectId}. Invites were sent to: ${invitees.join(', ')}.`
-      : `Admin approved your co-researcher request for ${proj?.name || approved.projectId}.`;
-    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch { /* ignore */ }
-    enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
-    addActivity(`${user?.fullName} approved co-researcher invite request for ${proj?.name || approved.projectId} (invitees: ${invitees.join(', ')})`);
-  };
-
-  const handleRejectCoResearcherRequest = (req) => {
-    const rejected = rejectPendingRequest(req.id);
-    if (!rejected) return;
-    const invitees = Array.isArray(rejected.proposedUpdates?.invitedToList) ? rejected.proposedUpdates.invitedToList : [];
-    const proj = projects.find((p) => p.id === rejected.projectId);
-    const approverMsg = invitees.length > 0
-      ? `Co-researcher invite request declined. No invite sent to: ${invitees.join(', ')}.`
-      : 'Co-researcher invite request declined.';
-    const requesterMsg = invitees.length > 0
-      ? `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}. No invite was sent to: ${invitees.join(', ')}.`
-      : `Admin declined your co-researcher request for ${proj?.name || rejected.projectId}.`;
-    try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch { /* ignore */ }
-    enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
-    addActivity(`${user?.fullName} rejected co-researcher invite request for ${proj?.name || rejected.projectId}`);
-  };
   const firstAdminSamplePendingProjectId = useMemo(() => {
     const req = adminSampleReviewRequests.find((r) => r.projectId);
     return req?.projectId || null;
@@ -609,6 +631,8 @@ export default function Dashboard() {
   ];
 
   const topActions = isAdmin ? adminActions : isResearcher ? researcherActions : studentActions;
+  const axisStroke = isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB';
+  const axisTickColor = isDark ? '#94A3B8' : '#6B7280';
 
   return (
     <div>
@@ -673,66 +697,6 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {adminCoResearcherReviewRequests.length > 0 && (
-            <section className="rounded-xl border border-indigo-100 bg-white p-4 shadow-sm space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-gray-800">Co-researcher requests</h3>
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900">
-                  {adminCoResearcherReviewRequests.length} pending
-                </span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Approve or decline here without opening notifications. You can also manage these on the{' '}
-                <Link to="/projects" className="text-indigo-700 font-medium hover:underline">Projects</Link> page.
-              </p>
-              <ul className="space-y-2">
-                {adminCoResearcherReviewRequests.map((req) => {
-                  const proj = projects.find((p) => p.id === req.projectId);
-                  const invitees = Array.isArray(req.proposedUpdates?.invitedToList) ? req.proposedUpdates.invitedToList : [];
-                  return (
-                    <li
-                      key={req.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 text-sm"
-                    >
-                      <div className="min-w-0 space-y-1">
-                        <p className="font-medium text-gray-800">{proj?.name || req.projectId}</p>
-                        <p className="text-xs text-gray-500">
-                          Requested by <span className="font-medium">{normalizePersonName(req.requestedBy)}</span>
-                          {req.submittedAt ? ` · ${new Date(req.submittedAt).toLocaleString()}` : ''}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          Invite{invitees.length === 1 ? '' : 's'}: {invitees.length ? invitees.join(', ') : '—'}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleApproveCoResearcherRequest(req)}
-                          className="px-3 py-1.5 rounded-lg bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium hover:opacity-95 transition-opacity"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRejectCoResearcherRequest(req)}
-                          className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                        >
-                          Decline
-                        </button>
-                        <Link
-                          to={`/projects/${req.projectId}`}
-                          className="inline-flex items-center px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-medium text-indigo-800 hover:bg-indigo-50"
-                        >
-                          Open project
-                        </Link>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
-
           <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <StatCard label="Total Samples" value={samples.length} />
             <StatCard label="Total Projects" value={projects.length} />
@@ -748,9 +712,18 @@ export default function Dashboard() {
                 {growthByMonth.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={growthByMonth} margin={{ top: 8, right: 8, left: -12, bottom: 8 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 11, fill: axisTickColor }}
+                        tickLine={{ stroke: axisStroke }}
+                        axisLine={{ stroke: axisStroke }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: axisTickColor }}
+                        tickLine={{ stroke: axisStroke }}
+                        axisLine={{ stroke: axisStroke }}
+                      />
+                      <Tooltip content={<ChartTooltipContent isDark={isDark} />} />
                       <Area type="monotone" dataKey="total" stroke="#0f766e" fill="#99f6e4" fillOpacity={0.7} />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -762,21 +735,32 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">Sample Status Distribution</h3>
-              <SampleStatusPie data={statusDistribution} emptyLabel="No sample status data." />
+              <SampleStatusPie data={statusDistribution} emptyLabel="No sample status data." isDark={isDark} />
             </div>
           </section>
 
           <section className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-gray-800">Activity Timeline (30 Days)</h3>
-              <span className="text-xs text-gray-500">Avg {avgActionsPerDay} actions/day</span>
+              <span className="text-xs text-gray-500 dark:text-slate-400">Avg {avgActionsPerDay} actions/day</span>
             </div>
             <div className="h-32">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={activity30Day} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={4} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} tickLine={false} axisLine={false} />
-                  <Tooltip />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: axisTickColor }}
+                    interval={4}
+                    tickLine={{ stroke: axisStroke }}
+                    axisLine={{ stroke: axisStroke }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: axisTickColor }}
+                    allowDecimals={false}
+                    tickLine={{ stroke: axisStroke }}
+                    axisLine={{ stroke: axisStroke }}
+                  />
+                  <Tooltip content={<ChartTooltipContent isDark={isDark} />} />
                   <Line type="monotone" dataKey="actions" stroke="#0f766e" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -840,8 +824,8 @@ export default function Dashboard() {
               )}
             </div>
             {myPendingInvites.length > 0 && (
-              <div className="mt-3 rounded-lg border border-indigo-200 border-l-4 border-l-indigo-500 bg-indigo-50/40 p-3">
-                <p className="text-xs font-semibold text-indigo-900">
+              <div className="mt-3 rounded-lg border border-teal-200 border-l-4 border-l-teal-500 bg-teal-50/80 p-3 dark:border-teal-400/30 dark:border-l-teal-400 dark:bg-teal-950/35">
+                <p className="text-xs font-semibold text-teal-900 dark:text-teal-200">
                   {myPendingInvites.length === 1
                     ? 'You have 1 pending invite for a co-researcher role:'
                     : `You have ${myPendingInvites.length} pending invites for a co-researcher role:`}
@@ -850,7 +834,7 @@ export default function Dashboard() {
                   {recentPendingInvites.map((inv) => {
                     const proj = projects.find((p) => p.id === inv.projectId);
                     return (
-                      <p key={inv.id} className="flex items-start gap-1.5 text-xs text-indigo-900">
+                      <p key={inv.id} className="flex items-start gap-1.5 text-xs text-gray-700 dark:text-slate-200">
                         <ClipboardList className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-90" strokeWidth={2} aria-hidden />
                         <span>
                           {proj?.name || inv.projectId} - Invited by {inv.invitedBy} ({relativeTimeFromIso(inv.createdAt)})
@@ -859,12 +843,12 @@ export default function Dashboard() {
                     );
                   })}
                   {myPendingInvites.length > 2 && (
-                    <p className="text-xs text-indigo-700">...and {myPendingInvites.length - 2} more</p>
+                    <p className="text-xs text-teal-700 dark:text-teal-300">...and {myPendingInvites.length - 2} more</p>
                   )}
                 </div>
                 <Link
                   to={projectsPendingCoResearcherInvitesPath}
-                  className="inline-flex mt-2 px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
+                  className="inline-flex mt-2 px-2.5 py-1 rounded-md bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
                 >
                   View All Invites
                 </Link>
@@ -886,9 +870,18 @@ export default function Dashboard() {
                 {myGrowthByMonth.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={myGrowthByMonth} margin={{ top: 8, right: 8, left: -12, bottom: 8 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 11, fill: axisTickColor }}
+                        tickLine={{ stroke: axisStroke }}
+                        axisLine={{ stroke: axisStroke }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: axisTickColor }}
+                        tickLine={{ stroke: axisStroke }}
+                        axisLine={{ stroke: axisStroke }}
+                      />
+                      <Tooltip content={<ChartTooltipContent isDark={isDark} />} />
                       <Area type="monotone" dataKey="total" stroke="#0f766e" fill="#99f6e4" fillOpacity={0.7} />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -900,7 +893,7 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">My Samples by Status</h3>
-              <SampleStatusPie data={myStatusDistribution} emptyLabel="No personal sample status data." />
+              <SampleStatusPie data={myStatusDistribution} emptyLabel="No personal sample status data." isDark={isDark} />
             </div>
           </section>
 
@@ -1016,9 +1009,21 @@ export default function Dashboard() {
                 {samplesByOrganism.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={samplesByOrganism} layout="vertical" margin={{ top: 4, right: 8, left: 10, bottom: 4 }}>
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
-                      <Tooltip />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 11, fill: axisTickColor }}
+                        tickLine={{ stroke: axisStroke }}
+                        axisLine={{ stroke: axisStroke }}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tick={{ fontSize: 11, fill: axisTickColor }}
+                        tickLine={{ stroke: axisStroke }}
+                        axisLine={{ stroke: axisStroke }}
+                        width={90}
+                      />
+                      <Tooltip content={<ChartTooltipContent isDark={isDark} />} />
                       <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1030,7 +1035,7 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">Sample Status Distribution</h3>
-              <SampleStatusPie data={publishedStatusDistribution} emptyLabel="No status data for published samples." />
+              <SampleStatusPie data={publishedStatusDistribution} emptyLabel="No status data for published samples." isDark={isDark} />
             </div>
           </section>
 

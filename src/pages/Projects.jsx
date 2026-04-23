@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
+import { Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
@@ -14,17 +15,29 @@ import {
   PENDING_CO_RESEARCHER_INVITES_HASH,
 } from '../utils/personName';
 
-function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEditLeadResearcher }) {
+function ProjectForm({
+  project,
+  onSave,
+  onCancel,
+  canSetPublicationStatus,
+  canEditLeadResearcher,
+  pendingRequests,
+  coResearcherInvites,
+}) {
   const { users, projects } = useData();
   const [sbProfiles, setSbProfiles] = useState([]);
+  const [coSearch, setCoSearch] = useState('');
+  const [coDropdownOpen, setCoDropdownOpen] = useState(false);
+  const [coHighlightedNames, setCoHighlightedNames] = useState([]);
+  const coDropdownRef = useRef(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) return;
     let cancelled = false;
     supabase
       .from('profiles')
-      .select('full_name, role, status')
-      .in('role', ['Researcher', 'Admin'])
+      .select('full_name, role, status, email')
+      .eq('role', 'Researcher')
       .eq('status', 'Active')
       .then(({ data }) => {
         if (!cancelled && data) setSbProfiles(data);
@@ -50,15 +63,47 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
     ? generateProjectId(form.name, form.startDate, projects)
     : '';
 
+  const pendingAdminInvitees = useMemo(() => {
+    if (!project?.id) return [];
+    const names = new Set();
+    const isActivePendingRequest = (r) => {
+      if (r.projectId !== project.id || r.type !== 'coResearcherInvite') return false;
+      if (r.resolution) return false;
+      const status = String(r.status ?? '').trim().toLowerCase();
+      return status === '' || status === 'pending';
+    };
+    (pendingRequests || []).forEach((r) => {
+      if (!isActivePendingRequest(r)) return;
+      const list = Array.isArray(r.proposedUpdates?.invitedToList) ? r.proposedUpdates.invitedToList : [];
+      list.filter(Boolean).forEach((n) => names.add(n));
+    });
+    return [...names];
+  }, [pendingRequests, project?.id]);
+
+  const pendingInvitees = useMemo(() => {
+    if (!project?.id) return [];
+    const names = new Set();
+    (coResearcherInvites || [])
+      .filter((inv) => inv.projectId === project.id && String(inv.status ?? '').toLowerCase() === 'pending')
+      .forEach((inv) => {
+        if (inv.invitedTo) names.add(inv.invitedTo);
+      });
+    return [...names];
+  }, [coResearcherInvites, project?.id]);
+
   useEffect(() => {
     if (isEdit) {
+      const confirmed = Array.isArray(project?.coResearchers) ? project.coResearchers : [];
+      const merged = [...new Set([...confirmed, ...pendingAdminInvitees, ...pendingInvitees])];
+      setCoSearch('');
+      setCoHighlightedNames([]);
       setForm({
         name: project?.name ?? '',
         description: project?.description ?? '',
         startDate: project?.startDate ?? '',
         endDate: project?.endDate ?? '',
         leadResearcher: project?.leadResearcher ?? '',
-        coResearchers: Array.isArray(project?.coResearchers) ? project.coResearchers : [],
+        coResearchers: merged,
         status: project?.status ?? 'Active',
         publicationStatus: getProjectPublicationStatus(project),
       });
@@ -74,20 +119,94 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
       status: 'Active',
       publicationStatus: 'Draft',
     });
+    setCoSearch('');
+    setCoHighlightedNames([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, isEdit]);
+  }, [project?.id, isEdit, pendingAdminInvitees.join('|'), pendingInvitees.join('|')]);
 
   const availableCoResearchers = useMemo(() => {
-    const fromContext = (users || [])
-      .filter((u) => u.status === 'Active' && (u.role === 'Researcher' || u.role === 'Admin'))
-      .map((u) => u.fullName)
-      .filter(Boolean);
-    const fromSb = sbProfiles
-      .map((p) => p.full_name)
-      .filter(Boolean);
-    const merged = [...new Set([...fromContext, ...fromSb])];
-    return merged.filter((name) => name !== form.leadResearcher);
+    const byName = new Map();
+    (users || [])
+      .filter((u) => u.status === 'Active' && u.role === 'Researcher' && u.fullName)
+      .forEach((u) => {
+        const key = u.fullName.trim();
+        if (!byName.has(key)) byName.set(key, { name: key, email: u.email || '' });
+      });
+
+    (sbProfiles || [])
+      .filter((p) => p?.full_name)
+      .forEach((p) => {
+        const key = String(p.full_name).trim();
+        if (!key) return;
+        if (!byName.has(key)) byName.set(key, { name: key, email: p.email || '' });
+      });
+
+    return Array.from(byName.values())
+      .filter((r) => r.name !== form.leadResearcher)
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [users, sbProfiles, form.leadResearcher]);
+
+  const availableCoResearcherNames = useMemo(
+    () => availableCoResearchers.map((r) => r.name),
+    [availableCoResearchers]
+  );
+
+  const filteredCoResearchers = useMemo(() => {
+    const q = coSearch.trim().toLowerCase();
+    if (!q) return availableCoResearchers;
+    return availableCoResearchers.filter((r) =>
+      r.name.toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)
+    );
+  }, [availableCoResearchers, coSearch]);
+
+  const confirmedSet = useMemo(() => {
+    const set = new Set();
+    const confirmed = Array.isArray(project?.coResearchers) ? project.coResearchers : [];
+    confirmed.forEach((name) => set.add(name));
+    return set;
+  }, [project?.coResearchers]);
+
+  const pendingAdminSet = useMemo(() => {
+    const set = new Set();
+    pendingAdminInvitees.forEach((name) => {
+      if (![...confirmedSet].some((n) => displayNamesEqual(n, name))) set.add(name);
+    });
+    return set;
+  }, [pendingAdminInvitees, confirmedSet]);
+
+  const pendingInviteSet = useMemo(() => {
+    const set = new Set();
+    pendingInvitees.forEach((name) => {
+      if ([...confirmedSet].some((n) => displayNamesEqual(n, name))) return;
+      if ([...pendingAdminSet].some((n) => displayNamesEqual(n, name))) return;
+      set.add(name);
+    });
+    return set;
+  }, [pendingInvitees, confirmedSet, pendingAdminSet]);
+
+  const getTagStatus = (name) => {
+    if ([...confirmedSet].some((n) => displayNamesEqual(n, name))) return 'confirmed';
+    if ([...pendingAdminSet].some((n) => displayNamesEqual(n, name))) return 'pendingAdmin';
+    if ([...pendingInviteSet].some((n) => displayNamesEqual(n, name))) return 'invited';
+    return 'new';
+  };
+
+  const newlySelectedSet = useMemo(() => {
+    const set = new Set();
+    (Array.isArray(form.coResearchers) ? form.coResearchers : []).forEach((name) => {
+      if (getTagStatus(name) === 'new') set.add(name);
+    });
+    return set;
+  }, [form.coResearchers, confirmedSet, pendingAdminSet, pendingInviteSet]);
+
+  const dropdownResearchers = useMemo(() => {
+    return availableCoResearchers.filter((researcher) => {
+      if (displayNamesEqual(researcher.name, form.leadResearcher)) return false;
+      if ([...confirmedSet].some((n) => displayNamesEqual(n, researcher.name))) return false;
+      if ([...newlySelectedSet].some((n) => displayNamesEqual(n, researcher.name))) return false;
+      return true;
+    });
+  }, [availableCoResearchers, form.leadResearcher, confirmedSet, newlySelectedSet]);
 
   useEffect(() => {
     setForm((f) => ({
@@ -95,6 +214,52 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
       coResearchers: (Array.isArray(f.coResearchers) ? f.coResearchers : []).filter((n) => n && n !== f.leadResearcher),
     }));
   }, [form.leadResearcher]);
+
+  useEffect(() => {
+    const current = Array.isArray(form.coResearchers) ? form.coResearchers : [];
+    const allowed = new Set(availableCoResearcherNames);
+    const next = current.filter((name) => allowed.has(name));
+    if (next.length !== current.length) {
+      setForm((f) => ({ ...f, coResearchers: next }));
+    }
+  }, [availableCoResearcherNames, form.coResearchers]);
+
+  useEffect(() => {
+    if (!coDropdownOpen) return;
+    const onMouseDown = (event) => {
+      if (coDropdownRef.current && !coDropdownRef.current.contains(event.target)) {
+        setCoDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [coDropdownOpen]);
+
+  const toggleCoResearcher = (name) => {
+    setCoHighlightedNames((prev) => (
+      prev.some((n) => displayNamesEqual(n, name))
+        ? prev.filter((n) => !displayNamesEqual(n, name))
+        : [...prev, name]
+    ));
+  };
+
+  const confirmHighlightedCoResearchers = () => {
+    setForm((f) => {
+      const prev = Array.isArray(f.coResearchers) ? f.coResearchers : [];
+      const toAdd = coHighlightedNames.filter((name) => !prev.some((n) => displayNamesEqual(n, name)));
+      if (toAdd.length === 0) return f;
+      return { ...f, coResearchers: [...prev, ...toAdd] };
+    });
+    setCoHighlightedNames([]);
+  };
+
+  const removeCoResearcher = (name) => {
+    if (getTagStatus(name) !== 'new') return;
+    setForm((f) => ({
+      ...f,
+      coResearchers: (Array.isArray(f.coResearchers) ? f.coResearchers : []).filter((n) => n !== name),
+    }));
+  };
 
   return (
     <form
@@ -188,36 +353,124 @@ function ProjectForm({ project, onSave, onCancel, canSetPublicationStatus, canEd
       )}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Co-Researchers</label>
-        {availableCoResearchers.length === 0 ? (
-          <div className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-500 bg-gray-50">
-            No eligible co-researchers available.
-          </div>
-        ) : (
-          <div className="border border-gray-300 rounded-lg p-3 max-h-44 overflow-auto space-y-2">
-            {availableCoResearchers.map((name) => {
-              const checked = Array.isArray(form.coResearchers) && form.coResearchers.includes(name);
-              return (
-                <label key={name} className="flex items-center gap-2 text-sm text-gray-800 select-none">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                      const isChecked = e.target.checked;
-                      setForm((f) => {
-                        const prev = Array.isArray(f.coResearchers) ? f.coResearchers : [];
-                        if (isChecked) return { ...f, coResearchers: [...new Set([...prev, name])] };
-                        return { ...f, coResearchers: prev.filter((n) => n !== name) };
-                      });
-                    }}
-                    className="h-4 w-4 accent-mint-600"
-                  />
-                  <span>{name}</span>
-                </label>
-              );
-            })}
+        <div className="relative" ref={coDropdownRef}>
+          <input
+            type="text"
+            value={coSearch}
+            onChange={(e) => {
+              setCoSearch(e.target.value);
+              if (!coDropdownOpen) setCoDropdownOpen(true);
+            }}
+            onFocus={() => setCoDropdownOpen(true)}
+            placeholder="Search researchers by name..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-mint-500/30"
+          />
+
+          {coDropdownOpen && (
+            <div className="absolute z-30 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-900 overflow-hidden">
+              <div className="max-h-72 overflow-y-auto">
+                {dropdownResearchers.length === 0 && availableCoResearchers.length === 0 ? (
+                  <p className="px-3 py-3 text-sm text-gray-500 dark:text-slate-400">No researchers available.</p>
+                ) : filteredCoResearchers.filter((researcher) =>
+                  dropdownResearchers.some((r) => displayNamesEqual(r.name, researcher.name))
+                ).length === 0 ? (
+                  <p className="px-3 py-3 text-sm text-gray-500 dark:text-slate-400">No researchers found.</p>
+                ) : (
+                  filteredCoResearchers
+                    .filter((researcher) => dropdownResearchers.some((r) => displayNamesEqual(r.name, researcher.name)))
+                    .map((researcher) => {
+                    const selected = coHighlightedNames.some((n) => displayNamesEqual(n, researcher.name));
+                    const pendingAdmin = [...pendingAdminSet].some((n) => displayNamesEqual(n, researcher.name));
+                    const pendingInvite = [...pendingInviteSet].some((n) => displayNamesEqual(n, researcher.name));
+                    const disabled = pendingAdmin || pendingInvite;
+                    return (
+                      <button
+                        key={researcher.name}
+                        type="button"
+                        onClick={() => {
+                          if (disabled) return;
+                          toggleCoResearcher(researcher.name);
+                        }}
+                        disabled={disabled}
+                        className={`w-full text-left px-3 py-2.5 border-b border-gray-100 last:border-b-0 dark:border-slate-700 transition-colors ${
+                          disabled
+                            ? 'bg-gray-50 text-gray-400 dark:bg-slate-800/70 dark:text-slate-400 cursor-not-allowed'
+                            : selected
+                            ? 'bg-teal-100/80 text-teal-900 dark:bg-teal-900/45 dark:text-teal-100'
+                            : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{researcher.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                              {researcher.email || 'No email available'}
+                              {pendingAdmin ? ' · Pending Admin Approval' : pendingInvite ? ' · Invite Sent' : ''}
+                            </p>
+                          </div>
+                          {selected && !disabled && <Check className="h-4 w-4 shrink-0 mt-0.5 text-teal-700 dark:text-teal-200" />}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <div className="p-2 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    confirmHighlightedCoResearchers();
+                    setCoDropdownOpen(false);
+                  }}
+                  className="w-full px-3 py-2 rounded-lg bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium hover:opacity-95 transition-opacity"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {Array.isArray(form.coResearchers) && form.coResearchers.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[...form.coResearchers]
+              .sort((a, b) => {
+                const order = { confirmed: 0, pendingAdmin: 1, invited: 2, new: 3 };
+                const d = order[getTagStatus(a)] - order[getTagStatus(b)];
+                return d !== 0 ? d : a.localeCompare(b);
+              })
+              .map((name) => {
+                const status = getTagStatus(name);
+                const tagClass = status === 'confirmed'
+                  ? 'border-teal-200 bg-teal-100 text-teal-800 dark:border-teal-500/60 dark:bg-teal-900/50 dark:text-teal-300'
+                  : status === 'pendingAdmin'
+                    ? 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-400/60 dark:bg-amber-500/20 dark:text-amber-300'
+                    : status === 'invited'
+                      ? 'border-orange-300 bg-orange-100 text-orange-900 dark:border-orange-400/60 dark:bg-orange-500/20 dark:text-orange-300'
+                      : 'border-dashed border-teal-400 bg-white text-teal-700 dark:bg-transparent dark:border-teal-300 dark:text-teal-200';
+                const statusLabel = status === 'pendingAdmin' ? 'Pending Admin' : status === 'invited' ? 'Invited' : '';
+                return (
+                  <span
+                    key={name}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${tagClass}`}
+                  >
+                    <span>{name}</span>
+                    {statusLabel && <span className="text-[10px] font-semibold opacity-80">{statusLabel}</span>}
+                    {status === 'new' && (
+                      <button
+                        type="button"
+                        onClick={() => removeCoResearcher(name)}
+                        className="inline-flex items-center justify-center rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                        aria-label={`Remove ${name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
           </div>
         )}
-        <p className="text-xs text-gray-500 mt-1">Click to select one or more co-researchers.</p>
       </div>
       <select
         value={form.status}
@@ -375,46 +628,113 @@ export default function Projects() {
         ? data
         : { ...data, publicationStatus: existing?.publicationStatus };
 
-      // Co-Researcher invitation workflow:
-      // - additions become invites (not immediately added)
-      // - removals apply immediately
       const prevCo = Array.isArray(existing?.coResearchers) ? existing.coResearchers : [];
       const nextCo = Array.isArray(payloadBase?.coResearchers) ? payloadBase.coResearchers : [];
-      const added = nextCo.filter((n) => n && !prevCo.includes(n));
-      const removed = prevCo.filter((n) => n && !nextCo.includes(n));
+      const added = nextCo.filter((n) => n && !prevCo.some((p) => displayNamesEqual(p, n)));
+      const removed = prevCo.filter((n) => n && !nextCo.some((p) => displayNamesEqual(p, n)));
+
+      const pendingAdminNames = new Set();
+      const isActivePendingRequest = (r) => {
+        if (r.projectId !== existing.id || r.type !== 'coResearcherInvite') return false;
+        if (r.resolution) return false;
+        const status = String(r.status ?? '').trim().toLowerCase();
+        return status === '' || status === 'pending';
+      };
+      const pendingAdminRowsForProject = (pendingRequests || []).filter(
+        (r) => isActivePendingRequest(r)
+      );
+      pendingAdminRowsForProject.forEach((r) => {
+        const names = Array.isArray(r.proposedUpdates?.invitedToList) ? r.proposedUpdates.invitedToList : [];
+        names.filter(Boolean).forEach((name) => pendingAdminNames.add(name));
+      });
+
+      const pendingInviteRowsForProject = (coResearcherInvites || []).filter(
+        (inv) => inv.projectId === existing.id && String(inv.status ?? '').toLowerCase() === 'pending'
+      );
+      const pendingInviteNames = new Set(pendingInviteRowsForProject.map((inv) => inv.invitedTo).filter(Boolean));
+
+      const skippedPending = [];
+      const submitted = [];
+      const failed = [];
 
       // If an Admin adds themselves as a Co-Researcher, apply immediately (no invite needed).
       const adminSelf = isAdmin && user?.fullName ? user.fullName : null;
-      const selfAdded = adminSelf ? added.includes(adminSelf) : false;
-      const inviteAdded = selfAdded ? added.filter((n) => n !== adminSelf) : added;
+      const selfAdded = adminSelf ? added.some((n) => displayNamesEqual(n, adminSelf)) : false;
+      const inviteAdded = selfAdded ? added.filter((n) => !displayNamesEqual(n, adminSelf)) : added;
 
-      if (inviteAdded.length > 0) {
+      const newAdditions = inviteAdded.filter((name) => {
+        const alreadyPendingAdmin = [...pendingAdminNames].some((n) => displayNamesEqual(n, name));
+        const alreadyPendingInvite = [...pendingInviteNames].some((n) => displayNamesEqual(n, name));
+        if (alreadyPendingAdmin || alreadyPendingInvite) {
+          skippedPending.push(name);
+          return false;
+        }
+        return true;
+      });
+
+      if (newAdditions.length === 0 && skippedPending.length === 0 && !selfAdded) {
+        try {
+          window.dispatchEvent(new CustomEvent('biosample_flash', {
+            detail: { message: 'No new co-researchers to submit.', variant: 'success' },
+          }));
+        } catch {}
+      }
+
+      const submittedAfterRetry = [];
+      if (newAdditions.length > 0) {
         if (isAdmin) {
-          sendCoResearcherInvites({
-            projectId: existing.id,
-            invitedBy: user?.fullName || 'Unknown',
-            invitedToList: inviteAdded,
+          const adminResults = await Promise.allSettled(
+            newAdditions.map(async (name) => {
+              sendCoResearcherInvites({
+                projectId: existing.id,
+                invitedBy: user?.fullName || 'Unknown',
+                invitedToList: [name],
+              });
+              return name;
+            })
+          );
+          adminResults.forEach((result, idx) => {
+            const name = newAdditions[idx];
+            if (result.status === 'fulfilled') submitted.push(name);
+            else failed.push(name);
           });
-          const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${existing.name}: ${inviteAdded.join(', ')}`;
-          try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
         } else {
-          const created = await submitCoResearcherInviteRequest({
+          const processInviteResults = (results, names, onSuccess) => {
+            const retryCandidates = [];
+            results.forEach((result, idx) => {
+              const name = names[idx];
+              if (result.status === 'fulfilled') {
+                const response = result.value;
+                if (response?.ok) {
+                  onSuccess(name);
+                } else if (response?.reason === 'duplicate') {
+                  skippedPending.push(name);
+                } else {
+                  retryCandidates.push(name);
+                  console.error(`Co-researcher request failed for ${name}:`, response?.error || response?.reason || 'unknown');
+                }
+              } else {
+                retryCandidates.push(name);
+                console.error(`Co-researcher request promise rejected for ${name}:`, result.reason);
+              }
+            });
+            return retryCandidates;
+          };
+
+          const submitOne = (name) => submitCoResearcherInviteRequest({
             projectId: existing.id,
             requestedBy: user?.fullName || 'Unknown',
-            invitedToList: inviteAdded,
+            invitedToList: [name],
           });
-          if (!created) {
-            try {
-              window.dispatchEvent(new CustomEvent('biosample_flash', {
-                detail: {
-                  message: 'A matching co-researcher invite request is already pending admin approval.',
-                  variant: 'error',
-                },
-              }));
-            } catch {}
-          } else {
-            const msg = `Your request to add co-researcher${inviteAdded.length > 1 ? 's' : ''} (${inviteAdded.join(', ')}) was sent to Admin for approval.`;
-            try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+
+          const firstResults = await Promise.allSettled(newAdditions.map((name) => submitOne(name)));
+          const retryNames = processInviteResults(firstResults, newAdditions, (name) => submitted.push(name));
+
+          if (retryNames.length > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            const retryResults = await Promise.allSettled(retryNames.map((name) => submitOne(name)));
+            const finalFailed = processInviteResults(retryResults, retryNames, (name) => submittedAfterRetry.push(name));
+            failed.push(...finalFailed);
           }
         }
       }
@@ -428,6 +748,37 @@ export default function Projects() {
         })(),
       };
       updateProject(modal.id, payload);
+
+      const summaryParts = [];
+      if (submitted.length > 0) {
+        summaryParts.push(
+          isAdmin
+            ? `Invites sent: ${submitted.join(', ')}.`
+            : `Requests submitted for ${submitted.join(', ')}. Awaiting admin approval.`
+        );
+      }
+      if (submittedAfterRetry.length > 0) {
+        summaryParts.push(`Requests submitted for ${submittedAfterRetry.join(', ')} (after retry).`);
+      }
+      if (skippedPending.length > 0) {
+        summaryParts.push(`Skipped ${skippedPending.join(', ')} (already pending).`);
+      }
+      if (failed.length > 0) {
+        summaryParts.push(`Failed to submit for ${failed.join(', ')}. Please try again.`);
+      }
+      if (submitted.length === 0 && skippedPending.length > 0) {
+        summaryParts.unshift('All selected co-researchers already have pending requests. No new requests submitted.');
+      }
+      if (summaryParts.length > 0) {
+        try {
+          window.dispatchEvent(new CustomEvent('biosample_flash', {
+            detail: {
+              message: summaryParts.join(' '),
+              variant: submitted.length > 0 ? 'success' : failed.length > 0 ? 'error' : 'success',
+            },
+          }));
+        } catch {}
+      }
     }
     setModal(null);
   };
@@ -766,6 +1117,8 @@ export default function Projects() {
                     onCancel={() => setModal(null)}
                     canSetPublicationStatus={canManageProjects}
                     canEditLeadResearcher={isAdmin}
+                    pendingRequests={pendingRequests}
+                    coResearcherInvites={coResearcherInvites}
                   />
                 </div>
               </div>
