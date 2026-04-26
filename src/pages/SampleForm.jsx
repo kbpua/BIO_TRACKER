@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { SAMPLE_TYPES, SAMPLE_STATUSES } from '../data/mockData';
 import { generateSampleId } from '../utils/sampleId';
+import { displayNamesEqual } from '../utils/personName';
 
 export default function SampleForm() {
   const { id } = useParams();
@@ -11,7 +12,18 @@ export default function SampleForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { user, canManageSamples, isAdmin, isResearcher } = useAuth();
-  const { samples, organisms, projects, users, addSample, updateSample, addActivity, submitAddRequest, submitEditRequest } = useData();
+  const {
+    samples,
+    organisms,
+    projects,
+    users,
+    coResearcherInvites,
+    addSample,
+    updateSample,
+    addActivity,
+    submitAddRequest,
+    submitEditRequest,
+  } = useData();
 
   const lockProject = location.state?.lockProject && location.state?.projectId;
   const returnTo = location.state?.returnTo;
@@ -39,25 +51,75 @@ export default function SampleForm() {
 
   const sample = isEdit ? samples.find((s) => s.id === id) : null;
   const selectedProject = projects.find((p) => p.id === form.projectId);
+  const sampleProject = sample ? projects.find((p) => p.id === sample.projectId) : null;
+  const availableProjects = useMemo(() => {
+    if (isAdmin) return projects;
+    if (!isResearcher || !user?.fullName) return [];
+
+    return projects.filter((project) => {
+      const isLead = displayNamesEqual(project?.leadResearcher, user.fullName);
+      const isConfirmedCoResearcher = Array.isArray(project?.coResearchers)
+        && project.coResearchers.some((name) => displayNamesEqual(name, user.fullName));
+      const acceptedInvite = Array.isArray(coResearcherInvites)
+        && coResearcherInvites.some(
+          (inv) =>
+            inv.projectId === project.id
+            && String(inv.status || '').toLowerCase() === 'accepted'
+            && (displayNamesEqual(inv.invitedTo, user.fullName)
+              || inv.invitedToUserId === user.authId)
+        );
+      return isLead || isConfirmedCoResearcher || acceptedInvite;
+    });
+  }, [coResearcherInvites, isAdmin, isResearcher, projects, user?.authId, user?.fullName]);
+
+  const projectRoleById = useMemo(() => {
+    const byId = new Map();
+    if (!isResearcher || !user?.fullName) return byId;
+    availableProjects.forEach((project) => {
+      if (displayNamesEqual(project?.leadResearcher, user.fullName)) {
+        byId.set(project.id, 'Lead');
+      } else {
+        byId.set(project.id, 'Co-Researcher');
+      }
+    });
+    return byId;
+  }, [availableProjects, isResearcher, user?.fullName]);
+
+  const selectedProjectRole = projectRoleById.get(form.projectId) || null;
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const previewId = !isEdit && form.projectId && form.sampleType
     ? generateSampleId(selectedProject?.name, form.sampleType, samples.length)
     : '';
 
-  const isLeadResearcher = isResearcher && selectedProject?.leadResearcher === user?.fullName;
+  const isLeadResearcher = isResearcher && selectedProjectRole === 'Lead';
   const isCoResearcher = isResearcher
     && !isAdmin
     && !isLeadResearcher
-    && Array.isArray(selectedProject?.coResearchers)
-    && selectedProject.coResearchers.includes(user?.fullName);
+    && selectedProjectRole === 'Co-Researcher';
+
+  const isLeadResearcherForExistingSample = isResearcher
+    && displayNamesEqual(sampleProject?.leadResearcher, user?.fullName);
+  const isCoResearcherForExistingSample = isResearcher
+    && Array.isArray(sampleProject?.coResearchers)
+    && sampleProject.coResearchers.some((n) => displayNamesEqual(n, user?.fullName));
+  const isOwnExistingSample = Boolean(sample) && (
+    displayNamesEqual(sample?.collectedBy, user?.fullName)
+    || displayNamesEqual(sample?.createdBy, user?.fullName)
+  );
 
   useEffect(() => {
     if (!canManageSamples) {
       navigate('/samples');
       return;
     }
-    if (sample && isResearcher && sample.collectedBy !== user?.fullName) {
-      navigate('/samples');
-      return;
+    if (sample && isResearcher && !isAdmin) {
+      const canEditAsLead = isLeadResearcherForExistingSample;
+      const canEditAsOwnerCoResearcher = isCoResearcherForExistingSample && isOwnExistingSample;
+      if (!canEditAsLead && !canEditAsOwnerCoResearcher) {
+        navigate('/samples');
+        return;
+      }
     }
     if (sample) {
       setForm({
@@ -79,7 +141,29 @@ export default function SampleForm() {
     if (!isEdit && location.state?.projectId && location.state?.lockProject) {
       setForm((f) => ({ ...f, projectId: location.state.projectId }));
     }
-  }, [sample, isEdit, canManageSamples, navigate, isResearcher, user?.fullName, location.state?.projectId, location.state?.lockProject]);
+  }, [
+    sample,
+    isEdit,
+    canManageSamples,
+    navigate,
+    isResearcher,
+    isAdmin,
+    isLeadResearcherForExistingSample,
+    isCoResearcherForExistingSample,
+    isOwnExistingSample,
+    user?.fullName,
+    location.state?.projectId,
+    location.state?.lockProject,
+  ]);
+
+  useEffect(() => {
+    if (isEdit || lockProject || !isResearcher) return;
+    if (!form.projectId) return;
+    const stillAllowed = availableProjects.some((p) => p.id === form.projectId);
+    if (!stillAllowed) {
+      setForm((prev) => ({ ...prev, projectId: '' }));
+    }
+  }, [availableProjects, form.projectId, isEdit, isResearcher, lockProject]);
 
   const validate = () => {
     const e = {};
@@ -87,6 +171,9 @@ export default function SampleForm() {
     if (!form.organismId) e.organismId = 'Required';
     if (!form.projectId) e.projectId = 'Required';
     if (!form.collectionDate) e.collectionDate = 'Required';
+    if (form.collectionDate && form.collectionDate > todayStr) {
+      e.collectionDate = 'Collection date cannot be in the future';
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -268,15 +355,28 @@ export default function SampleForm() {
               <select
                 value={form.projectId}
                 onChange={(e) => setForm((f) => ({ ...f, projectId: e.target.value }))}
+                disabled={isResearcher && !isAdmin && availableProjects.length === 0}
                 className={`w-full px-3 py-2 border rounded-lg ${errors.projectId ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-mint-500`}
               >
                 <option value="">Select project</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {(isAdmin ? projects : availableProjects).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {isResearcher && !isAdmin ? `${p.name} (${projectRoleById.get(p.id) || 'Co-Researcher'})` : p.name}
+                  </option>
                 ))}
               </select>
+              {isResearcher && !isAdmin && availableProjects.length === 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  You are not part of any projects. Contact an Admin or Lead Researcher to be added to a project.
+                </p>
+              )}
               {errors.projectId && <p className="text-red-500 text-xs mt-1">{errors.projectId}</p>}
             </>
+          )}
+          {!isEdit && isResearcher && !isAdmin && selectedProjectRole === 'Co-Researcher' && (
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/40 dark:bg-amber-950/35 dark:text-amber-200">
+              You are a Co-Researcher on this project. Your sample will be submitted for approval by the Lead Researcher before it is added.
+            </div>
           )}
         </div>
         <div>
@@ -304,8 +404,15 @@ export default function SampleForm() {
           <input
             type="date"
             value={form.collectionDate}
-            onChange={(e) => setForm((f) => ({ ...f, collectionDate: e.target.value }))}
-            className={`w-full px-3 py-2 border rounded-lg ${errors.collectionDate ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-mint-500`}
+            max={todayStr}
+            onChange={(e) => {
+              const nextDate = e.target.value;
+              setForm((f) => ({ ...f, collectionDate: nextDate }));
+              if (errors.collectionDate && nextDate && nextDate <= todayStr) {
+                setErrors((prev) => ({ ...prev, collectionDate: undefined }));
+              }
+            }}
+            className={`date-input-bright-icon w-full px-3 py-2 border rounded-lg ${errors.collectionDate ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-mint-500`}
           />
           {errors.collectionDate && <p className="text-red-500 text-xs mt-1">{errors.collectionDate}</p>}
         </div>

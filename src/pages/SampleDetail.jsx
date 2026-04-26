@@ -1,6 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
 import { Dna, FlaskConical, Stethoscope, Microscope } from 'lucide-react';
-import { EditIconLink } from '../components/TableActionButtons';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { canUserViewProject } from '../utils/visibility';
@@ -32,7 +31,7 @@ function EduCard({ title, icon: Icon, children, headerClass }) {
 
 export default function SampleDetail() {
   const { id } = useParams();
-  const { canManageSamples, user } = useAuth();
+  const { user } = useAuth();
   const { samples, organisms, projects, coResearcherInvites } = useData();
 
   const getOrgName = (oid) => organisms.find((o) => o.id === oid)?.scientificName ?? '';
@@ -91,9 +90,6 @@ export default function SampleDetail() {
       <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-6">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <h1 className="text-xl font-bold text-gray-800">Sample Details</h1>
-          {canManageSamples && (
-            <EditIconLink to={`/samples/${row.id}/edit`} label="Edit sample" />
-          )}
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div><dt className="text-gray-500">Sample ID</dt><dd className="font-medium">{row.sampleId}</dd></div>

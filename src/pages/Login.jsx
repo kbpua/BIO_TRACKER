@@ -4,6 +4,13 @@ import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  GeneratePasswordButton,
+  PasswordMatchIndicator,
+  PasswordRequirementsHint,
+  PasswordStrengthIndicator,
+  generateSecurePassword,
+} from '../components/password/PasswordEnhancements';
 
 const REGISTER_ROLES = ['Researcher', 'Student'];
 
@@ -218,11 +225,8 @@ export default function Login() {
       });
     }
     setRegisterForm({ fullName: '', email: '', password: '', confirmPassword: '', role: 'Researcher' });
-    setSuccessMessage(
-      isResearcher
-        ? 'Your account has been submitted for admin approval. You will be able to log in once an administrator approves your account.'
-        : 'Account created successfully! You can now log in.'
-    );
+    // Keep researcher registration silent on this screen to avoid showing a persistent notice banner.
+    setSuccessMessage(isResearcher ? '' : 'Account created successfully! You can now log in.');
   };
 
   const handleGoogleSignIn = async () => {
@@ -489,9 +493,21 @@ export default function Login() {
                     onClose={() => setDismissedPasswordError(true)}
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Must include at least 1 uppercase, 1 lowercase, 1 number, 1 special character, and be 8+ characters.
-                </p>
+                <GeneratePasswordButton
+                  onGenerate={() => {
+                    const generated = generateSecurePassword(14);
+                    setRegisterForm((f) => ({ ...f, password: generated, confirmPassword: generated }));
+                    setShowRegisterPassword(true);
+                    setShowConfirmPassword(true);
+                    setRegisterPasswordError('');
+                    setRegisterConfirmError('');
+                    setRegisterGeneralError('');
+                    setDismissedPasswordError(false);
+                    setDismissedConfirmError(false);
+                  }}
+                />
+                <PasswordStrengthIndicator password={registerForm.password} />
+                <PasswordRequirementsHint />
               </div>
               <div className="relative">
                 <label htmlFor="reg-confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
@@ -524,6 +540,11 @@ export default function Login() {
                 <FieldErrorPopup
                   message={dismissedConfirmError ? '' : registerConfirmError}
                   onClose={() => setDismissedConfirmError(true)}
+                />
+                <PasswordMatchIndicator
+                  password={registerForm.password}
+                  confirmPassword={registerForm.confirmPassword}
+                  className="mt-2"
                 />
               </div>
               <div>

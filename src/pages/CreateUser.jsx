@@ -8,43 +8,20 @@ import {
   GraduationCap,
   CircleCheck,
   CircleX,
-  Sparkles,
 } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import {
+  GeneratePasswordButton,
+  PasswordMatchIndicator,
+  PasswordRequirementsHint,
+  PasswordStrengthIndicator,
+  generateSecurePassword,
+} from '../components/password/PasswordEnhancements';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function getPasswordStrength(password) {
-  let score = 0;
-  if ((password || '').length >= 8) score += 1;
-  if (/[A-Z]/.test(password || '')) score += 1;
-  if (/[a-z]/.test(password || '')) score += 1;
-  if (/[0-9]/.test(password || '')) score += 1;
-  if (/[^A-Za-z0-9]/.test(password || '')) score += 1;
-  if ((password || '').length >= 12) score += 1;
-
-  if (score <= 2) return { label: 'Weak', color: 'bg-red-500', width: 'w-1/3' };
-  if (score <= 4) return { label: 'Medium', color: 'bg-amber-400', width: 'w-2/3' };
-  return { label: 'Strong', color: 'bg-mint-500', width: 'w-full' };
-}
-
-function generateSecurePassword(length = 14) {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnopqrstuvwxyz';
-  const numbers = '23456789';
-  const symbols = '!@#$%^&*()-_=+[]{}?';
-  const all = upper + lower + numbers + symbols;
-
-  const pick = (set) => set[Math.floor(Math.random() * set.length)];
-  const chars = [pick(upper), pick(lower), pick(numbers), pick(symbols)];
-  while (chars.length < length) chars.push(pick(all));
-  for (let i = chars.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-  return chars.join('');
-}
 
 const ROLE_CARDS = [
   {
@@ -100,7 +77,6 @@ export default function CreateUser() {
     createdBy: currentUser?.fullName ?? 'Admin',
   });
 
-  const passwordStrength = useMemo(() => getPasswordStrength(form.password), [form.password]);
   const emailTaken = useMemo(
     () => (users || []).some((u) => u.email?.toLowerCase() === form.email.toLowerCase()),
     [users, form.email]
@@ -125,6 +101,7 @@ export default function CreateUser() {
 
   const allRequiredValid = () =>
     ['fullName', 'email', 'password', 'confirmPassword', 'role'].every((k) => fieldValid(k));
+  const canSubmit = allRequiredValid() && !submitting;
 
   const setField = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -191,7 +168,115 @@ export default function CreateUser() {
     try {
       await new Promise((r) => setTimeout(r, 260));
       const payload = createUserPayload();
-      addUser(payload);
+
+      if (isSupabaseAuth && isSupabaseConfigured() && supabase) {
+        // Use an isolated auth client so the Admin browser session is not replaced by signUp.
+        const signupClient = createClient(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_ANON_KEY,
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+              detectSessionInUrl: false,
+            },
+          }
+        );
+
+        const { data: authData, error: authError } = await signupClient.auth.signUp({
+          email: payload.email,
+          password: payload.password,
+          options: {
+            data: {
+              full_name: payload.fullName,
+              role: payload.role,
+              status: payload.status,
+              created_by: payload.createdBy,
+            },
+          },
+        });
+        if (authError) {
+          const msg = String(authError.message || 'Registration failed.');
+          if (/already registered|already exists|duplicate/i.test(msg)) {
+            setMessage({ type: 'error', text: 'An account with this email already exists.' });
+            notify('An account with this email already exists.', 'error');
+            return;
+          }
+          setMessage({ type: 'error', text: msg });
+          notify(msg, 'error');
+          return;
+        }
+
+        const authUserId = authData?.user?.id;
+        if (!authUserId) {
+          setMessage({ type: 'error', text: 'Could not create the authentication user.' });
+          notify('Could not create the authentication user.', 'error');
+          return;
+        }
+
+        const { data: legacyId, error: legacyErr } = await supabase.rpc('generate_profile_legacy_id', {
+          p_role: payload.role,
+          p_full_name: payload.fullName,
+        });
+        if (legacyErr || !legacyId) {
+          const msg = legacyErr?.message || 'Could not generate user ID.';
+          setMessage({ type: 'error', text: msg });
+          notify(msg, 'error');
+          return;
+        }
+
+        const profileRow = {
+          id: authUserId,
+          legacy_id: legacyId,
+          email: payload.email,
+          full_name: payload.fullName,
+          role: payload.role,
+          status: payload.status,
+          created_by: payload.createdBy,
+          pending_days_remaining: payload.status === 'Pending' ? 3 : null,
+        };
+
+        const { data: existingProfile, error: checkErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', authUserId)
+          .maybeSingle();
+        if (checkErr) {
+          const msg = checkErr.message || 'Unable to verify profile state.';
+          setMessage({ type: 'error', text: msg });
+          notify(msg, 'error');
+          return;
+        }
+
+        let profileError = null;
+        if (existingProfile?.id) {
+          const { error } = await supabase
+            .from('profiles')
+            .update({
+              legacy_id: profileRow.legacy_id,
+              email: profileRow.email,
+              full_name: profileRow.full_name,
+              role: profileRow.role,
+              status: profileRow.status,
+              created_by: profileRow.created_by,
+              pending_days_remaining: profileRow.pending_days_remaining,
+            })
+            .eq('id', authUserId);
+          profileError = error;
+        } else {
+          const { error } = await supabase.from('profiles').insert(profileRow);
+          profileError = error;
+        }
+        if (profileError) {
+          const msg = profileError.message || 'Failed to create profile.';
+          setMessage({ type: 'error', text: msg });
+          notify(msg, 'error');
+          return;
+        }
+      } else {
+        addUser(payload);
+      }
+
       const successText = `User account created successfully. ${payload.fullName} has been added as a ${payload.role}.`;
       notify(successText, 'success');
 
@@ -357,28 +442,16 @@ export default function CreateUser() {
                   {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
+              <GeneratePasswordButton
+                onGenerate={() => {
                   const generated = generateSecurePassword(14);
                   setField('password', generated);
                   setField('confirmPassword', generated);
                   setTouched((t) => ({ ...t, password: true, confirmPassword: true }));
                 }}
-                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-mint-200 bg-mint-50 text-mint-700 hover:bg-mint-100"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Generate Secure Password
-              </button>
-              <div className="mt-2">
-                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div className={`h-full ${passwordStrength.color} ${passwordStrength.width} transition-all`} />
-                </div>
-                <p className="text-xs text-gray-600 mt-1">Strength: {passwordStrength.label}</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Minimum 8 characters, at least one uppercase letter, one number, and one special character.
-              </p>
+              />
+              <PasswordStrengthIndicator password={form.password} />
+              <PasswordRequirementsHint />
             </div>
 
             <div>
@@ -397,10 +470,8 @@ export default function CreateUser() {
                 {confirmState === 'valid' && <CircleCheck className="h-4 w-4 text-mint-600 absolute right-3 top-1/2 -translate-y-1/2" />}
                 {confirmState === 'invalid' && <CircleX className="h-4 w-4 text-red-500 absolute right-3 top-1/2 -translate-y-1/2" />}
               </div>
-              {touched.confirmPassword && form.confirmPassword.length > 0 && (
-                <p className={`text-xs mt-1 ${confirmState === 'valid' ? 'text-mint-600' : 'text-red-600'}`}>
-                  {confirmState === 'valid' ? 'Passwords match.' : 'Passwords do not match.'}
-                </p>
+              {touched.confirmPassword && (
+                <PasswordMatchIndicator password={form.password} confirmPassword={form.confirmPassword} />
               )}
             </div>
           </div>
@@ -485,7 +556,7 @@ export default function CreateUser() {
 
           <button
             type="submit"
-            disabled={submitting || isSupabaseAuth}
+            disabled={!canSubmit}
             onClick={() => setSubmitMode('add-another')}
             className="px-4 py-2 rounded-xl border border-mint-300 text-sm font-medium text-mint-700 hover:bg-mint-50 disabled:opacity-60 disabled:cursor-not-allowed"
           >
@@ -494,7 +565,7 @@ export default function CreateUser() {
 
           <button
             type="submit"
-            disabled={submitting || isSupabaseAuth}
+            disabled={!canSubmit}
             onClick={() => setSubmitMode('create')}
             className="px-4 py-2 rounded-xl bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-sm font-medium text-white hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-mint-900/20 transition-opacity"
           >

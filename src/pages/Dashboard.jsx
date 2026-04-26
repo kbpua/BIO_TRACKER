@@ -48,7 +48,7 @@ function StatCard({ label, value, tone = 'mint' }) {
   );
 }
 
-function ActionCard({ title, count, to, detail, tone = 'mint' }) {
+function ActionCard({ title, count, to, detail, tone = 'mint', state }) {
   const hasAlert = Number(count) > 0;
   const toneStyles = {
     mint: hasAlert
@@ -100,6 +100,7 @@ function ActionCard({ title, count, to, detail, tone = 'mint' }) {
   return (
     <Link
       to={to}
+      state={state}
       className={`group rounded-xl border p-4 shadow-sm transition-colors ${toneStyles[tone] || toneStyles.mint}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -601,7 +602,14 @@ export default function Dashboard() {
       detail: 'Go straight to project queue and approve/reject',
       tone: 'rose',
     },
-    { title: 'At-risk samples', count: criticalSamples.length, to: '/samples', detail: 'Expired or contaminated samples need review', tone: 'rose' },
+    {
+      title: 'At-risk samples',
+      count: criticalSamples.length,
+      to: '/samples',
+      state: { highlight: 'at-risk' },
+      detail: 'Expired or contaminated samples need review',
+      tone: 'rose',
+    },
   ];
 
   const researcherActions = useMemo(
@@ -620,7 +628,14 @@ export default function Dashboard() {
         detail: 'Open project detail and resolve requests',
         tone: 'rose',
       },
-      { title: 'At-risk samples', count: criticalSamples.length, to: '/samples', detail: 'Review expired/contaminated samples', tone: 'rose' },
+      {
+        title: 'At-risk samples',
+        count: criticalSamples.length,
+        to: '/samples',
+        state: { highlight: 'at-risk' },
+        detail: 'Review expired/contaminated samples',
+        tone: 'rose',
+      },
     ],
     [criticalSamples.length, firstPendingProjectId, myInviteCount, myPendingRequestCount]
   );

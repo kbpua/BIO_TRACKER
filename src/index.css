@@ -176,3 +176,9 @@ html.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
   border: 1px solid rgba(148, 163, 184, 0.35) !important;
   color: #f8fafc !important;
 }
+
+/* Bright teal date picker icon on dark mode sample form date fields only. */
+html.dark input.date-input-bright-icon::-webkit-calendar-picker-indicator {
+  filter: invert(69%) sepia(67%) saturate(622%) hue-rotate(125deg) brightness(101%) contrast(96%);
+  opacity: 1;
+}
