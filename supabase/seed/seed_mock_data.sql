@@ -35,7 +35,7 @@ insert into public.projects (
     'Dr. Maria Santos',
     array['Dr. Juan Dela Cruz']::text[],
     'Active',
-    'Published',
+    'Published (public)',
     '{}'::text[]
   ),
   (
@@ -47,7 +47,7 @@ insert into public.projects (
     'Dr. Juan Dela Cruz',
     array['Dr. Maria Santos']::text[],
     'Active',
-    'Published',
+    'Published (public)',
     array['Dr. Maria Santos']::text[]
   ),
   (
@@ -59,7 +59,7 @@ insert into public.projects (
     'Dr. Liza Aquino',
     '{}'::text[],
     'Completed',
-    'Published',
+    'Published (public)',
     '{}'::text[]
   ),
   (

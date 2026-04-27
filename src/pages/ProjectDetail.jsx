@@ -49,7 +49,7 @@ export default function ProjectDetail() {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [confirmPublication, setConfirmPublication] = useState(null);
+  const [confirmPublication, setConfirmPublication] = useState('');
   const [confirmRequestDelete, setConfirmRequestDelete] = useState(null);
   const [coInviteModalOpen, setCoInviteModalOpen] = useState(false);
   const [coInviteSelection, setCoInviteSelection] = useState(() => new Set());
@@ -513,7 +513,7 @@ export default function ProjectDetail() {
     return (
       <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
         <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
-        <p className="text-gray-600">This project has not been published yet.</p>
+        <p className="text-gray-600">This project is not available for your role.</p>
         <Link to="/projects" className="text-mint-600 dark:text-mint-300 font-medium hover:underline dark:hover:text-mint-400">Back to Projects</Link>
       </div>
     );
@@ -546,21 +546,31 @@ export default function ProjectDetail() {
             )}
             {canChangePublication && (
               <>
-                {pubStatus === 'Draft' ? (
+                {pubStatus !== 'Published (public)' && (
                   <button
                     type="button"
-                    onClick={() => setConfirmPublication('publish')}
+                    onClick={() => setConfirmPublication('Published (public)')}
                     className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
                   >
-                    Publish Project
+                    Publish Publicly
                   </button>
-                ) : (
+                )}
+                {pubStatus !== 'Published (limited)' && (
                   <button
                     type="button"
-                    onClick={() => setConfirmPublication('unpublish')}
+                    onClick={() => setConfirmPublication('Published (limited)')}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                  >
+                    Publish Limited
+                  </button>
+                )}
+                {pubStatus !== 'Draft' && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmPublication('Draft')}
                     className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700"
                   >
-                    Unpublish Project
+                    Move to Draft
                   </button>
                 )}
               </>
@@ -993,21 +1003,23 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {confirmPublication && (
+      {Boolean(confirmPublication) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
             <p className="font-medium text-gray-800 mb-2">
-              {confirmPublication === 'publish' ? 'Publish this project?' : 'Unpublish this project?'}
+              Change publication status?
             </p>
             <p className="text-sm text-gray-500 mb-4">
-              {confirmPublication === 'publish'
-                ? 'Are you sure you want to publish this project? Once published, this project and all of its samples will become visible to all researchers and students in the system.'
-                : 'Are you sure you want to unpublish this project? This project and all of its samples will be hidden from other researchers and students.'}
+              {confirmPublication === 'Published (public)'
+                ? 'Set this project to Published (public)? Researchers, admins, and students will be able to view it.'
+                : confirmPublication === 'Published (limited)'
+                  ? 'Set this project to Published (limited)? Only researchers and admins will be able to view it; students will not.'
+                  : 'Set this project back to Draft? It will be hidden from users who are not on the project team.'}
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
-                onClick={() => setConfirmPublication(null)}
+                onClick={() => setConfirmPublication('')}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
               >
                 Cancel
@@ -1015,12 +1027,15 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 onClick={() => {
-                  const next = confirmPublication === 'publish' ? 'Published' : 'Draft';
-                  updateProject(project.id, { publicationStatus: next });
-                  setConfirmPublication(null);
+                  updateProject(project.id, { publicationStatus: confirmPublication });
+                  setConfirmPublication('');
                 }}
                 className={`px-4 py-2 text-white rounded-lg text-sm font-medium ${
-                  confirmPublication === 'publish' ? 'bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] hover:opacity-95 transition-opacity' : 'bg-orange-600 hover:bg-orange-700'
+                  confirmPublication === 'Published (public)'
+                    ? 'bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] hover:opacity-95 transition-opacity'
+                    : confirmPublication === 'Published (limited)'
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-orange-600 hover:bg-orange-700'
                 }`}
               >
                 Confirm

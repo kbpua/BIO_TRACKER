@@ -1,15 +1,25 @@
-import { displayNamesEqual, isPendingCoResearcherInviteForUser } from './personName';
+import { displayNamesEqual } from './personName';
 
-export const PUBLICATION_STATUSES = ['Draft', 'Published'];
+export const PUBLICATION_STATUSES = ['Draft', 'Published (limited)', 'Published (public)'];
 
 export function getProjectPublicationStatus(project) {
   const v = project?.publicationStatus;
-  if (v === 'Published' || v === 'Draft') return v;
+  if (v === 'Draft' || v === 'Published (limited)' || v === 'Published (public)') return v;
+  // Backward compatibility for older rows/seeds before the new states.
+  if (v === 'Published') return 'Published (public)';
   return 'Draft';
 }
 
 export function isProjectPublished(project) {
-  return getProjectPublicationStatus(project) === 'Published';
+  return getProjectPublicationStatus(project) !== 'Draft';
+}
+
+export function isProjectPubliclyPublished(project) {
+  return getProjectPublicationStatus(project) === 'Published (public)';
+}
+
+export function isProjectLimitedPublished(project) {
+  return getProjectPublicationStatus(project) === 'Published (limited)';
 }
 
 export function isUserOnProjectTeam(user, project) {
@@ -27,23 +37,12 @@ export function isUserOnProjectTeam(user, project) {
  * @param {{ projectId?: string, status?: string }[] | null | undefined} coResearcherInvites optional — when set, draft projects
  *   with a pending invite for this user are visible (so they can open the project and accept).
  */
-export function canUserViewProject(user, project, coResearcherInvites) {
+export function canUserViewProject(user, project) {
   if (!project) return false;
   if (user?.role === 'Admin') return true;
-  if (isProjectPublished(project)) return true;
+  if (isProjectPubliclyPublished(project)) return true;
+  if (isProjectLimitedPublished(project) && user?.role === 'Researcher') return true;
   if (user?.role === 'Researcher' && isUserOnProjectTeam(user, project)) return true;
-  if (
-    user?.role === 'Researcher'
-    && Array.isArray(coResearcherInvites)
-    && coResearcherInvites.some(
-      (inv) =>
-        inv.projectId === project.id
-        && String(inv.status ?? '').toLowerCase() === 'pending'
-        && isPendingCoResearcherInviteForUser(inv, user)
-    )
-  ) {
-    return true;
-  }
   return false;
 }
 
@@ -55,7 +54,7 @@ export function canUserChangeProjectPublication(user, project) {
 
 export function getVisibleProjects(projects, user, coResearcherInvites) {
   const list = Array.isArray(projects) ? projects : [];
-  return list.filter((p) => canUserViewProject(user, p, coResearcherInvites));
+  return list.filter((p) => canUserViewProject(user, p));
 }
 
 export function getVisibleSamples(samples, projects, user, coResearcherInvites) {
@@ -71,7 +70,7 @@ export function getVisibleSamples(samples, projects, user, coResearcherInvites) 
       if (!proj) return true;
       if (user?.role === 'Admin') return true;
       if (isProjectPublished(proj)) return true;
-      return user?.role === 'Researcher' && canUserViewProject(user, proj, coResearcherInvites);
+      return user?.role === 'Researcher' && canUserViewProject(user, proj);
     })
     .map((s) => s);
 }

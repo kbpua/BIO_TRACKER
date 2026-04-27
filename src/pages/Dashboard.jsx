@@ -19,7 +19,13 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getVisibleProjects, getVisibleSamples } from '../utils/visibility';
+import {
+  getVisibleProjects,
+  getVisibleSamples,
+  getProjectPublicationStatus,
+  isProjectPubliclyPublished,
+  isProjectPublished,
+} from '../utils/visibility';
 import { isPendingCoResearcherInviteForUser, projectsPendingCoResearcherInvitesPath } from '../utils/personName';
 
 function StatCard({ label, value, tone = 'mint' }) {
@@ -310,7 +316,7 @@ export default function Dashboard() {
   );
 
   const publishedProjects = useMemo(
-    () => visibleProjects.filter((p) => p.publicationStatus === 'Published').length,
+    () => visibleProjects.filter((p) => isProjectPublished(p)).length,
     [visibleProjects]
   );
 
@@ -393,7 +399,7 @@ export default function Dashboard() {
     [samples, user]
   );
   const publishedVisibleProjectsCount = useMemo(
-    () => visibleProjects.filter((p) => p.publicationStatus === 'Published').length,
+    () => visibleProjects.filter((p) => isProjectPublished(p)).length,
     [visibleProjects]
   );
 
@@ -533,7 +539,7 @@ export default function Dashboard() {
     }));
   }, [myInvolvedProjects, samples, user, pendingRequests]);
   const publishedProjectsAll = useMemo(
-    () => projects.filter((p) => p.publicationStatus === 'Published'),
+    () => projects.filter((p) => isProjectPubliclyPublished(p)),
     [projects]
   );
   const publishedProjectIdSet = useMemo(
@@ -946,9 +952,13 @@ export default function Dashboard() {
                     </td>
                     <td className="py-2.5 px-4">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        project.publicationStatus === 'Published' ? 'bg-mint-100 text-mint-800' : 'bg-orange-100 text-orange-800'
+                        getProjectPublicationStatus(project) === 'Published (public)'
+                          ? 'bg-mint-100 text-mint-800'
+                          : getProjectPublicationStatus(project) === 'Published (limited)'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-orange-100 text-orange-800'
                       }`}>
-                        {project.publicationStatus}
+                        {getProjectPublicationStatus(project)}
                       </span>
                     </td>
                     <td className="py-2.5 px-4">{project.sampleCount}</td>

@@ -69,7 +69,7 @@ export default function SampleDetail() {
     return (
       <div className="max-w-xl mx-auto mt-12 text-center space-y-3">
         <h1 className="text-xl font-semibold text-gray-800">Access Denied</h1>
-        <p className="text-gray-600">This sample belongs to a project that has not been published yet.</p>
+        <p className="text-gray-600">This sample belongs to a project that is not available for your role.</p>
         <Link to="/samples" className="text-mint-600 dark:text-mint-300 font-medium hover:underline dark:hover:text-mint-400">Back to Samples</Link>
       </div>
     );

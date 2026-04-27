@@ -534,12 +534,16 @@ export default function Projects() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPublication, setFilterPublication] = useState('All');
+  const publicationFilterOptions = useMemo(
+    () => ['All', ...PUBLICATION_STATUSES],
+    []
+  );
 
   useEffect(() => {
     const incoming = location.state?.filterPublication;
     if (!incoming) return;
-    setFilterPublication(incoming);
-  }, [location.state]);
+    setFilterPublication(publicationFilterOptions.includes(incoming) ? incoming : 'All');
+  }, [location.state, publicationFilterOptions]);
 
   useEffect(() => {
     void refreshInvitesAndRequests();
@@ -622,6 +626,7 @@ export default function Projects() {
       }
       const payload = canManageProjects ? data : { ...data, publicationStatus: 'Draft' };
       addProject({ ...payload, id });
+      setFilterPublication('All');
     } else if (modal?.id) {
       const existing = projects.find((p) => p.id === modal.id);
       const payloadBase = canManageProjects
@@ -1003,7 +1008,8 @@ export default function Projects() {
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-mint-500"
             >
               <option value="All">All Publication</option>
-              <option value="Published">Published</option>
+              <option value="Published (public)">Published (public)</option>
+              <option value="Published (limited)">Published (limited)</option>
               <option value="Draft">Draft</option>
             </select>
           )}
@@ -1050,9 +1056,11 @@ export default function Projects() {
                       {p.status}
                     </span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      getProjectPublicationStatus(p) === 'Published'
+                      getProjectPublicationStatus(p) === 'Published (public)'
                         ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
-                        : 'bg-orange-200 text-[#0b3f3b] dark:bg-orange-200 dark:text-[#0b3f3b]'
+                        : getProjectPublicationStatus(p) === 'Published (limited)'
+                          ? 'bg-blue-200 text-[#0b3f3b] dark:bg-blue-200 dark:text-[#0b3f3b]'
+                          : 'bg-orange-200 text-[#0b3f3b] dark:bg-orange-200 dark:text-[#0b3f3b]'
                     }`}>
                       {getProjectPublicationStatus(p)}
                     </span>

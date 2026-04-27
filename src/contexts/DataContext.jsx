@@ -10,7 +10,7 @@ import {
 } from '../data/mockData';
 import { setUserPassword } from '../store/authStore';
 import { generateUserId, getMaxUserIdIncrement } from '../utils/userId';
-import { getProjectPublicationStatus } from '../utils/visibility';
+import { getProjectPublicationStatus, isProjectPubliclyPublished } from '../utils/visibility';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import {
   normalizePersonName,
@@ -1547,7 +1547,21 @@ export function DataProvider({ children }) {
     setProjects((prev) => [newProject, ...prev]);
     if (supabaseEnabled && supabase) {
       supabase.from('projects').insert(toProjectRow(newProject)).then(({ error }) => {
-        if (error) console.error('Failed to add project in Supabase:', error.message);
+        if (error) {
+          console.error('Failed to add project in Supabase:', error.message);
+          // Roll back optimistic local insert so UI matches persisted DB state.
+          setProjects((prev) => prev.filter((p) => p.id !== newProject.id));
+          try {
+            window.dispatchEvent(
+              new CustomEvent('biosample_flash', {
+                detail: {
+                  message: `Failed to save project to database: ${error.message}`,
+                  variant: 'error',
+                },
+              })
+            );
+          } catch {}
+        }
       });
     }
     return newProject;
@@ -1572,9 +1586,17 @@ export function DataProvider({ children }) {
       currentProject
       && next
       && currentProject.publicationStatus !== next.publicationStatus
-      && (next.publicationStatus === 'Published' || next.publicationStatus === 'Draft')
+      && (
+        next.publicationStatus === 'Published (public)'
+        || next.publicationStatus === 'Published (limited)'
+        || next.publicationStatus === 'Draft'
+      )
     ) {
-      const statusWord = next.publicationStatus === 'Published' ? 'Published' : 'Unpublished';
+      const statusWord = next.publicationStatus === 'Draft'
+        ? 'Unpublished'
+        : next.publicationStatus === 'Published (limited)'
+          ? 'Published (limited)'
+          : 'Published (public)';
       const recipients = [next.leadResearcher, ...(next.coResearchers || [])];
       recipients.filter(Boolean).forEach((name) => {
         notifyUserByName({
@@ -1587,7 +1609,7 @@ export function DataProvider({ children }) {
           targetId: id,
         });
       });
-      if (next.publicationStatus === 'Published') {
+      if (isProjectPubliclyPublished(next)) {
         createRoleNotification({
           role: 'Student',
           type: 'PROJECT_EVENT',

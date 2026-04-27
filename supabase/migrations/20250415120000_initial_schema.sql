@@ -31,7 +31,7 @@ exception when duplicate_object then null;
 end $$;
 
 do $$ begin
-  create type public.publication_status as enum ('Draft', 'Published');
+  create type public.publication_status as enum ('Draft', 'Published (limited)', 'Published (public)');
 exception when duplicate_object then null;
 end $$;
 
