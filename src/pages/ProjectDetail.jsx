@@ -82,7 +82,7 @@ export default function ProjectDetail() {
   const hasCoResearcherExportApproval =
     isCoResearcher &&
     Array.isArray(project?.approvedExporters) &&
-    project.approvedExporters.includes(user?.fullName);
+    project.approvedExporters.some((name) => displayNamesEqual(name, user?.fullName));
   const showExportCsvButton =
     canExportFromProjectPage && (isAdmin || isLeadResearcher || (isCoResearcher && hasCoResearcherExportApproval));
   const showRequestExportButton =
@@ -145,6 +145,24 @@ export default function ProjectDetail() {
     const filename = `${project.id}_samples_${dateStr}.csv`;
     exportSamplesCSV(rowsForExport, organisms, projects, filename);
     addActivity(`${user?.fullName} exported CSV for project ${project.name}`);
+
+    // Co-researcher export approval is single-use. After one successful download,
+    // remove their temporary approval so they need to request again next time.
+    if (isCoResearcher && !isAdmin && hasCoResearcherExportApproval && user?.fullName) {
+      const currentApproved = Array.isArray(project.approvedExporters) ? project.approvedExporters : [];
+      const nextApproved = currentApproved.filter((entry) => !displayNamesEqual(entry, user.fullName));
+      updateProject(project.id, { approvedExporters: nextApproved });
+      try {
+        window.dispatchEvent(
+          new CustomEvent('biosample_flash', {
+            detail: {
+              message: 'CSV downloaded. Export access has been used and you will need to request approval again for another download.',
+              variant: 'success',
+            },
+          })
+        );
+      } catch {}
+    }
   };
 
   const handleRequestExport = () => {
@@ -365,6 +383,25 @@ export default function ProjectDetail() {
     || isLeadResearcher
     || (isResearcher && pendingCoResearcherInvitesForProject.some((inv) =>
       displayNamesEqual(inv.invitedBy, user?.fullName)));
+
+  const adminPendingItems = useMemo(() => {
+    if (!isAdmin) return [];
+    const requestItems = pendingForProjectQueue.map((req) => ({
+      kind: 'request',
+      id: req.id,
+      submittedAt: req.submittedAt,
+      request: req,
+    }));
+    const inviteItems = pendingCoResearcherInvitesForProject.map((inv) => ({
+      kind: 'invite',
+      id: inv.id,
+      submittedAt: inv.createdAt,
+      invite: inv,
+    }));
+    return [...requestItems, ...inviteItems].sort(
+      (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
+    );
+  }, [isAdmin, pendingForProjectQueue, pendingCoResearcherInvitesForProject]);
 
   useEffect(() => {
     if (!id) return;
@@ -659,7 +696,7 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {canSeeOutgoingCoResearcherInvites && (
+      {!isAdmin && canSeeOutgoingCoResearcherInvites && (
         <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-semibold text-gray-800">Pending co-researcher invitations</h2>
@@ -749,93 +786,115 @@ export default function ProjectDetail() {
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-semibold text-gray-800">Pending Requests</h2>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-              {pendingForProjectQueue.length} pending requests
+              {isAdmin ? adminPendingItems.length : pendingForProjectQueue.length} pending requests
             </span>
           </div>
-          {pendingForProjectQueue.length === 0 ? (
+          {(isAdmin ? adminPendingItems.length === 0 : pendingForProjectQueue.length === 0) ? (
             <p className="text-sm text-gray-500">No pending requests.</p>
           ) : (
             <div className="space-y-2">
-              {pendingForProjectQueue.map((req) => (
-                <div key={req.id} className="border border-gray-200 rounded-lg p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm">
-                      <p className="font-medium text-gray-800">
-                        {req.type === 'export'
-                          ? 'Export Request'
-                          : req.type === 'coResearcherInvite'
-                            ? 'Co-Researcher Invite Request'
-                          : req.type === 'add'
-                            ? 'Add Request'
-                            : req.type === 'edit'
-                              ? 'Edit Request'
-                              : 'Delete Request'}
-                        {!['export', 'coResearcherInvite'].includes(req.type) && (
-                          <>
-                            <span className="text-gray-400 font-normal"> · </span>
-                            <span className="font-mono">{req.sampleId}</span>
-                          </>
+              {(isAdmin ? adminPendingItems : pendingForProjectQueue).map((item) => {
+                if (isAdmin && item.kind === 'invite') {
+                  const inv = item.invite;
+                  return (
+                    <div key={inv.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm">
+                          <p className="font-medium text-gray-800">Co-Researcher Invitation</p>
+                          <p className="text-xs text-gray-500">
+                            Invited by <span className="font-medium">{inv.invitedBy}</span> · {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Pending response from: {inv.invitedTo || '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const req = isAdmin ? item.request : item;
+                return (
+                  <div key={req.id} className="border border-gray-200 rounded-lg p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm">
+                        <p className="font-medium text-gray-800">
+                          {req.type === 'export'
+                            ? 'Export Request'
+                            : req.type === 'coResearcherInvite'
+                              ? 'Co-Researcher Invite Request'
+                            : req.type === 'add'
+                              ? 'Add Request'
+                              : req.type === 'edit'
+                                ? 'Edit Request'
+                                : 'Delete Request'}
+                          {!['export', 'coResearcherInvite'].includes(req.type) && (
+                            <>
+                              <span className="text-gray-400 font-normal"> · </span>
+                              <span className="font-mono">{req.sampleId}</span>
+                            </>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Requested by <span className="font-medium">{req.requestedBy}</span> · {new Date(req.submittedAt).toLocaleString()}
+                        </p>
+                        {req.type === 'export' && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            Requesting CSV export of their own samples in this project
+                          </p>
                         )}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Requested by <span className="font-medium">{req.requestedBy}</span> · {new Date(req.submittedAt).toLocaleString()}
-                      </p>
-                      {req.type === 'export' && (
-                        <p className="text-xs text-gray-600 mt-1">
-                          Requesting CSV export of their own samples in this project
-                        </p>
-                      )}
-                      {req.type === 'coResearcherInvite' && (
-                        <p className="text-xs text-gray-600 mt-1">
-                          Requested co-researcher invite approval for: {(req.proposedUpdates?.invitedToList || []).join(', ') || '—'}
-                        </p>
+                        {req.type === 'coResearcherInvite' && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            Requested co-researcher invite approval for: {(req.proposedUpdates?.invitedToList || []).join(', ') || '—'}
+                          </p>
+                        )}
+                      </div>
+                      {canApproveOrRejectRequest(req) && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => approve(req.id)}
+                            className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => reject(req.id)}
+                            className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
                       )}
                     </div>
-                    {canApproveOrRejectRequest(req) && (
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => approve(req.id)}
-                          className="px-3 py-1.5 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-xs font-medium rounded-lg hover:opacity-95 transition-opacity"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => reject(req.id)}
-                          className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50"
-                        >
-                          Reject
-                        </button>
+
+                    {req.type === 'edit' && Array.isArray(req.changes) && req.changes.length > 0 && (
+                      <div className="mt-2 text-xs text-gray-700">
+                        {req.changes.map((c) => (
+                          <div key={c.field}>
+                            <span className="font-medium">{c.field}</span>: {String(c.from)} → {String(c.to)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {req.type === 'delete' && req.reason && (
+                      <p className="mt-2 text-xs text-gray-700">
+                        <span className="font-medium">Reason</span>: {req.reason}
+                      </p>
+                    )}
+
+                    {req.type === 'add' && req.proposedSample && (
+                      <div className="mt-2 text-xs text-gray-700">
+                        <div><span className="font-medium">Sample Type</span>: {req.proposedSample.sampleType || '—'}</div>
+                        <div><span className="font-medium">Disease</span>: {req.proposedSample.disease || '—'}</div>
+                        <div><span className="font-medium">Status</span>: {req.proposedSample.status || '—'}</div>
                       </div>
                     )}
                   </div>
-
-                  {req.type === 'edit' && Array.isArray(req.changes) && req.changes.length > 0 && (
-                    <div className="mt-2 text-xs text-gray-700">
-                      {req.changes.map((c) => (
-                        <div key={c.field}>
-                          <span className="font-medium">{c.field}</span>: {String(c.from)} → {String(c.to)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {req.type === 'delete' && req.reason && (
-                    <p className="mt-2 text-xs text-gray-700">
-                      <span className="font-medium">Reason</span>: {req.reason}
-                    </p>
-                  )}
-
-                  {req.type === 'add' && req.proposedSample && (
-                    <div className="mt-2 text-xs text-gray-700">
-                      <div><span className="font-medium">Sample Type</span>: {req.proposedSample.sampleType || '—'}</div>
-                      <div><span className="font-medium">Disease</span>: {req.proposedSample.disease || '—'}</div>
-                      <div><span className="font-medium">Status</span>: {req.proposedSample.status || '—'}</div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -873,7 +932,7 @@ export default function ProjectDetail() {
                 onClick={handleExportProjectCsv}
                 className="px-3 py-2 bg-white border border-mint-300 text-mint-700 text-sm font-medium rounded-lg hover:bg-mint-50 hover:text-mint-800 dark:bg-slate-900 dark:border-mint-400/70 dark:text-mint-300 dark:hover:bg-mint-400/15 dark:hover:text-mint-200"
               >
-                Export CSV
+                {isCoResearcher && !isAdmin && !isLeadResearcher ? 'Download CSV' : 'Export CSV'}
               </button>
             )}
             {showRequestExportButton && (

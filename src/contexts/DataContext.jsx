@@ -839,7 +839,16 @@ export function DataProvider({ children }) {
     };
     setPendingRequests((prev) => {
       const dup = prev.some(
-        (r) => r.projectId === projectId && r.requestedBy === requestedBy && r.type === 'export'
+        (r) =>
+          r.projectId === projectId
+          && r.requestedBy === requestedBy
+          && r.type === 'export'
+          && !r.resolution
+          && (
+            r.status == null
+            || String(r.status).trim() === ''
+            || String(r.status).toLowerCase() === 'pending'
+          )
       );
       if (dup) return prev;
       created = req;
