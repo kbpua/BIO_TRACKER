@@ -847,14 +847,25 @@ export default function ProjectDetail() {
             Related Samples
           </h2>
           <div className="flex flex-wrap gap-2">
-            {canAddSample && (
-              <Link
-                to="/samples/new"
-                state={{ projectId: project.id, lockProject: true, returnTo: `/projects/${project.id}` }}
-                className="px-3 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
-              >
-                {isCoResearcher && !isAdmin ? 'Request Add Sample' : 'Add Sample'}
-              </Link>
+            {(isAdmin || isResearcher) && (
+              canAddSample ? (
+                <Link
+                  to="/samples/new"
+                  state={{ projectId: project.id, lockProject: true, returnTo: `/projects/${project.id}` }}
+                  className="px-3 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity"
+                >
+                  {isCoResearcher && !isAdmin ? 'Request Add Sample' : 'Add Sample'}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Only researchers involved in this project can add samples."
+                  className="px-3 py-2 bg-gray-200 text-gray-500 text-sm font-medium rounded-lg cursor-not-allowed"
+                >
+                  Add Sample
+                </button>
+              )
             )}
             {showExportCsvButton && (
               <button
