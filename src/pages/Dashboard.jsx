@@ -349,10 +349,6 @@ export default function Dashboard() {
     () => (pendingRequests || []).filter((r) => r.type !== 'coResearcherInvite'),
     [pendingRequests]
   );
-  const adminCoResearcherReviewRequests = useMemo(
-    () => (pendingRequests || []).filter((r) => r.type === 'coResearcherInvite' && !r.resolution),
-    [pendingRequests]
-  );
 
   const firstAdminSamplePendingProjectId = useMemo(() => {
     const req = adminSampleReviewRequests.find((r) => r.projectId);
@@ -693,14 +689,6 @@ export default function Dashboard() {
                   {adminSampleReviewRequests.length} sample requests awaiting review
                 </Link>
               )}
-              {adminCoResearcherReviewRequests.length > 0 && (
-                <Link
-                  to="/projects"
-                  className="inline-flex items-center rounded-full border border-indigo-400 bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-950 hover:bg-indigo-200/90 transition-colors"
-                >
-                  {adminCoResearcherReviewRequests.length} co-researcher requests awaiting review
-                </Link>
-              )}
               {draftProjectCount > 0 && (
                 <Link
                   to="/projects"
@@ -710,7 +698,7 @@ export default function Dashboard() {
                   {draftProjectCount} unpublished projects
                 </Link>
               )}
-              {pendingCount === 0 && adminSampleReviewRequests.length === 0 && adminCoResearcherReviewRequests.length === 0 && draftProjectCount === 0 && (
+              {pendingCount === 0 && adminSampleReviewRequests.length === 0 && draftProjectCount === 0 && (
                 <div className="inline-flex items-center rounded-full border border-mint-400 bg-mint-100 px-3 py-1 text-xs font-semibold text-mint-900">
                   All clear - no pending actions
                 </div>

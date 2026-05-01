@@ -175,7 +175,7 @@ async function persistCoResearcherInviteResolution(supabaseClient, {
 function mapCoResearcherInviteFromDb(inv) {
   const rawStatus = inv?.status;
   const s0 = rawStatus == null || rawStatus === '' ? 'Pending' : String(rawStatus);
-  const status = ['Pending', 'Accepted', 'Declined'].includes(s0)
+  const status = ['Pending', 'Accepted', 'Declined', 'Cancelled'].includes(s0)
     ? s0
     : s0.charAt(0).toUpperCase() + s0.slice(1).toLowerCase();
   return {
@@ -882,99 +882,6 @@ export function DataProvider({ children }) {
     return created;
   }, [notifyUserByName, projects, supabaseEnabled]);
 
-  const submitCoResearcherInviteRequest = useCallback(async ({
-    projectId,
-    requestedBy,
-    invitedToList,
-  }) => {
-    let created = null;
-    let duplicateFound = false;
-    const cleanInvitedToList = [...new Set((invitedToList || []).filter(Boolean))];
-    if (cleanInvitedToList.length === 0) return { ok: false, reason: 'empty' };
-
-    let invitedToUserIds = cleanInvitedToList.map(() => null);
-    if (supabaseEnabled && supabase) {
-      const { data: peerRows, error: peerErr } = await supabase
-        .from('profiles')
-        .select('id,legacy_id,email,full_name,role,status,date_created,created_by,pending_days_remaining')
-        .eq('status', 'Active')
-        .in('role', ['Researcher', 'Admin']);
-      if (peerErr) {
-        console.error('Failed to load peer profiles for co-researcher request:', peerErr.message);
-      } else {
-        const peers = (peerRows || []).map(mapProfileRow);
-        invitedToUserIds = cleanInvitedToList.map((n) => resolveUserAuthIdFromDisplayName(peers, n) || null);
-      }
-    } else {
-      invitedToUserIds = cleanInvitedToList.map((n) => resolveUserAuthIdFromDisplayName(users, n) || null);
-    }
-
-    const req = {
-      id: generateId('pr'),
-      projectId,
-      type: 'coResearcherInvite',
-      requestedBy,
-      requestedByUserId: user?.authId || null,
-      submittedAt: new Date().toISOString(),
-      proposedUpdates: {
-        invitedToList: cleanInvitedToList,
-        invitedToUserIds,
-      },
-    };
-    setPendingRequests((prev) => {
-      const dup = prev.some((r) => (
-        r.projectId === projectId
-        && r.requestedBy === requestedBy
-        && r.type === 'coResearcherInvite'
-        && !r.resolution
-        && Array.isArray(r.proposedUpdates?.invitedToList)
-        && r.proposedUpdates.invitedToList.length === cleanInvitedToList.length
-        && r.proposedUpdates.invitedToList.every((name) => cleanInvitedToList.includes(name))
-      ));
-      if (dup) {
-        duplicateFound = true;
-        return prev;
-      }
-      created = req;
-      return [req, ...prev];
-    });
-    if (!created) {
-      return { ok: false, reason: duplicateFound ? 'duplicate' : 'unknown' };
-    }
-    if (created && supabaseEnabled && supabase) {
-      const row = {
-        id: created.id,
-        project_id: created.projectId,
-        type: created.type,
-        requested_by: created.requestedBy,
-        submitted_at: created.submittedAt,
-        proposed_updates: created.proposedUpdates || null,
-      };
-      if (user?.authId) row.requested_by_user_id = user.authId;
-      let { error } = await supabase.from('pending_requests').insert(row);
-      if (error?.message && /requested_by_user_id/i.test(error.message)) {
-        const { requested_by_user_id: _omit, ...rest } = row;
-        ({ error } = await supabase.from('pending_requests').insert(rest));
-      }
-      if (error) {
-        console.error('Failed to save co-researcher invite request:', error.message);
-        setPendingRequests((prev) => prev.filter((r) => r.id !== created.id));
-        return { ok: false, reason: 'error', error: error.message };
-      }
-    }
-    const project = projects.find((p) => p.id === projectId);
-    createRoleNotification({
-      role: 'Admin',
-      type: 'APPROVAL_REQUEST',
-      title: 'Co-Researcher Assignment Request',
-      description: `${requestedBy} wants to add ${cleanInvitedToList.join(', ')} to ${project?.name || projectId}. Awaiting your approval.`,
-      linkTo: '/projects',
-      targetEntity: 'project',
-      targetId: projectId,
-    });
-    return { ok: true, reason: 'created', request: created };
-  }, [createRoleNotification, mapProfileRow, projects, supabase, supabaseEnabled, user?.authId, users]);
-
   const createCoResearcherInvites = useCallback(async ({
     projectId,
     invitedBy,
@@ -1094,6 +1001,66 @@ export function DataProvider({ children }) {
     });
     return created;
   }, [createNotification, mapProfileRow, notifyUserByName, projects, refreshInvitesAndRequests, supabase, supabaseEnabled, users]);
+
+  // Compatibility wrapper for the previous request-based flow.
+  // The admin approval gate has been removed; invitations now go directly to
+  // the target researcher. Returns { ok, reason, created } so existing call
+  // sites that branched on { ok, reason } continue to work.
+  const submitCoResearcherInviteRequest = useCallback(async ({
+    projectId,
+    invitedBy,
+    requestedBy,
+    invitedToList,
+  }) => {
+    const cleanInvitedToList = [...new Set((invitedToList || []).filter(Boolean))];
+    if (cleanInvitedToList.length === 0) return { ok: false, reason: 'empty' };
+
+    const inviter = invitedBy || requestedBy || user?.fullName || 'Unknown';
+    const created = await createCoResearcherInvites({
+      projectId,
+      invitedBy: inviter,
+      invitedToList: cleanInvitedToList,
+    });
+
+    if (!Array.isArray(created) || created.length === 0) {
+      return { ok: false, reason: 'duplicate' };
+    }
+    return { ok: true, reason: 'created', created };
+  }, [createCoResearcherInvites, user?.fullName]);
+
+  /**
+   * Lead Researcher (or Admin) cancels a pending co-researcher invitation
+   * they sent. The row is removed so it disappears from the target researcher's
+   * Dashboard and Projects page. The invitee's pending INVITE notification for
+   * this project is also cleaned up so cancel/re-invite cycles do not pile up
+   * stale notifications. No new notification is sent on cancellation.
+   */
+  const cancelCoResearcherInvite = useCallback(async (inviteId) => {
+    const iid = String(inviteId || '').trim();
+    if (!iid) return false;
+    const invite = coResearcherInvitesRef.current.find((i) => String(i.id || '').trim() === iid);
+    if (!invite) return false;
+    if (String(invite.status ?? '').toLowerCase() !== 'pending') return false;
+
+    if (supabaseEnabled && supabase) {
+      const { error } = await supabase.from('co_researcher_invites').delete().eq('id', iid);
+      if (error) {
+        console.error('Failed to cancel co-researcher invite:', error.message);
+        return false;
+      }
+      if (invite.invitedToUserId && invite.projectId) {
+        const { error: notifErr } = await supabase.rpc('delete_co_researcher_invite_notifications', {
+          p_user_id: invite.invitedToUserId,
+          p_project_id: invite.projectId,
+        });
+        if (notifErr) {
+          console.error('Failed to clear invitee notifications after cancel:', notifErr.message);
+        }
+      }
+    }
+    setCoResearcherInvites((prev) => prev.filter((i) => String(i.id || '').trim() !== iid));
+    return true;
+  }, [supabaseEnabled]);
 
   const approvePendingRequest = useCallback((requestId) => {
     const rid = String(requestId || '').trim();
@@ -1413,7 +1380,7 @@ export function DataProvider({ children }) {
     projectId,
     invitedBy,
     invitedToList,
-  }) => void createCoResearcherInvites({ projectId, invitedBy, invitedToList }), [createCoResearcherInvites]);
+  }) => createCoResearcherInvites({ projectId, invitedBy, invitedToList }), [createCoResearcherInvites]);
 
   const respondToCoResearcherInvite = useCallback(async (inviteId, decision) => {
     const iid = String(inviteId || '').trim();
@@ -1435,6 +1402,17 @@ export function DataProvider({ children }) {
           console.error('Failed to remove invite:', error.message);
           return null;
         }
+        // Clear the invitee's own pending INVITE notification so it does not
+        // linger in their bell after they have responded.
+        if (user?.authId && invite.projectId) {
+          const { error: notifErr } = await supabase.rpc('delete_co_researcher_invite_notifications', {
+            p_user_id: user.authId,
+            p_project_id: invite.projectId,
+          });
+          if (notifErr) {
+            console.error('Failed to clear own invite notifications after decline:', notifErr.message);
+          }
+        }
       }
       setCoResearcherInvites((prev) => prev.filter((i) => String(i.id || '').trim() !== iid));
       void notifyUserByName({
@@ -1446,6 +1424,7 @@ export function DataProvider({ children }) {
         targetEntity: 'project',
         targetId: invite.projectId,
       });
+      void refreshNotifications();
       return { ...invite, status: decision };
     }
 
@@ -1508,6 +1487,17 @@ export function DataProvider({ children }) {
       const { error: delErr } = await supabase.from('co_researcher_invites').delete().eq('id', iid);
       if (delErr) {
         console.error('Failed to remove invite after accept:', delErr.message);
+      }
+      // Clear the invitee's own pending INVITE notification so it does not
+      // linger in their bell after they have responded.
+      if (user?.authId && invite.projectId) {
+        const { error: notifErr } = await supabase.rpc('delete_co_researcher_invite_notifications', {
+          p_user_id: user.authId,
+          p_project_id: invite.projectId,
+        });
+        if (notifErr) {
+          console.error('Failed to clear own invite notifications after accept:', notifErr.message);
+        }
       }
     }
 
@@ -1826,6 +1816,7 @@ export function DataProvider({ children }) {
     approvePendingRequest,
     rejectPendingRequest,
     sendCoResearcherInvites,
+    cancelCoResearcherInvite,
     respondToCoResearcherInvite,
     addActivity,
     addProject,

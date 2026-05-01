@@ -42,7 +42,7 @@ export default function ProjectDetail() {
     coResearcherInvites,
     respondToCoResearcherInvite,
     sendCoResearcherInvites,
-    submitCoResearcherInviteRequest,
+    cancelCoResearcherInvite,
     refreshInvitesAndRequests,
   } = useData();
   const [search, setSearch] = useState('');
@@ -211,9 +211,9 @@ export default function ProjectDetail() {
   }, [pendingRequests, project]);
 
   const pendingForProjectQueue = useMemo(
-    () => pendingForProject.filter(
-      (r) => !(r.type === 'coResearcherInvite' && r.resolution)
-    ),
+    // Co-researcher invitations are no longer reviewed in the pending queue;
+    // they are managed in the dedicated invitations panel instead.
+    () => pendingForProject.filter((r) => r.type !== 'coResearcherInvite'),
     [pendingForProject]
   );
 
@@ -276,38 +276,41 @@ export default function ProjectDetail() {
     let shouldCloseModal = true;
 
     if (inviteAdded.length > 0) {
-      if (isAdmin) {
-        sendCoResearcherInvites({
+      try {
+        const created = await sendCoResearcherInvites({
           projectId: project.id,
           invitedBy: user?.fullName || 'Unknown',
           invitedToList: inviteAdded,
         });
-        const msg = `Co-Researcher invite${inviteAdded.length > 1 ? 's' : ''} sent for ${project.name}: ${inviteAdded.join(', ')}`;
-        try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
-        addActivity(`${user?.fullName} set up co-researcher invite(s) for ${project.name}: ${inviteAdded.join(', ')}`);
-      } else {
-        const created = await submitCoResearcherInviteRequest({
-          projectId: project.id,
-          requestedBy: user?.fullName || 'Unknown',
-          invitedToList: inviteAdded,
-        });
-        if (!created?.ok) {
+        const createdNames = Array.isArray(created)
+          ? created.map((c) => c.invitedTo).filter(Boolean)
+          : [];
+        if (createdNames.length > 0) {
+          const msg = `Co-Researcher invitation${createdNames.length > 1 ? 's' : ''} sent for ${project.name}: ${createdNames.join(', ')}.`;
+          try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
+          addActivity(`${user?.fullName} sent co-researcher invite(s) for ${project.name}: ${createdNames.join(', ')}`);
+        } else {
           shouldCloseModal = false;
           try {
             window.dispatchEvent(new CustomEvent('biosample_flash', {
               detail: {
-                message: created?.reason === 'duplicate'
-                  ? 'A matching co-researcher invite request is already pending admin approval.'
-                  : 'Could not submit one or more co-researcher requests. Please try again.',
+                message: 'Those researchers already have pending invitations on this project.',
                 variant: 'error',
               },
             }));
           } catch {}
-        } else {
-          const msg = `Your request to add co-researcher${inviteAdded.length > 1 ? 's' : ''} (${inviteAdded.join(', ')}) was sent to Admin for approval.`;
-          try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
-          addActivity(`${user?.fullName} set up co-researcher invite(s) for ${project.name}: ${inviteAdded.join(', ')}`);
         }
+      } catch (e) {
+        shouldCloseModal = false;
+        console.error('Failed to send co-researcher invites:', e);
+        try {
+          window.dispatchEvent(new CustomEvent('biosample_flash', {
+            detail: {
+              message: 'Could not send one or more invitations. Please try again.',
+              variant: 'error',
+            },
+          }));
+        } catch {}
       }
     }
 
@@ -330,34 +333,6 @@ export default function ProjectDetail() {
     void refreshInvitesAndRequests();
   };
 
-  const myCoResearcherInviteAwaitingAdmin = useMemo(() => {
-    if (!project) return null;
-    return (pendingRequests || []).find(
-      (r) =>
-        r.projectId === project.id
-        && r.type === 'coResearcherInvite'
-        && !r.resolution
-        && (
-          (user?.authId && r.requestedByUserId && r.requestedByUserId === user.authId)
-          || displayNamesEqual(r.requestedBy, user?.fullName)
-        )
-    ) || null;
-  }, [pendingRequests, project, user?.authId, user?.fullName]);
-
-  const myResolvedCoResearcherInviteRequest = useMemo(() => {
-    if (!project) return null;
-    return (pendingRequests || []).find(
-      (r) =>
-        r.projectId === project.id
-        && r.type === 'coResearcherInvite'
-        && r.resolution
-        && (
-          (user?.authId && r.requestedByUserId && r.requestedByUserId === user.authId)
-          || displayNamesEqual(r.requestedBy, user?.fullName)
-        )
-    ) || null;
-  }, [pendingRequests, project, user?.authId, user?.fullName]);
-
   const myPendingCoResearcherInvite = useMemo(() => {
     if (!project || !user) return null;
     return (coResearcherInvites || []).find(
@@ -369,12 +344,9 @@ export default function ProjectDetail() {
   }, [coResearcherInvites, project, user]);
 
   const canApproveOrRejectRequest = (req) => {
-    if (req.type === 'coResearcherInvite') {
-      if (!isAdmin) return false;
-      const requestedByMe = (user?.authId && req.requestedByUserId && req.requestedByUserId === user.authId)
-        || displayNamesEqual(req.requestedBy, user?.fullName);
-      return !requestedByMe;
-    }
+    // Co-researcher invitations no longer go through an approval flow; only
+    // sample add/edit/delete/export requests can still be approved here.
+    if (req.type === 'coResearcherInvite') return false;
     return canSeePendingQueue;
   };
 
@@ -386,22 +358,15 @@ export default function ProjectDetail() {
 
   const adminPendingItems = useMemo(() => {
     if (!isAdmin) return [];
-    const requestItems = pendingForProjectQueue.map((req) => ({
-      kind: 'request',
-      id: req.id,
-      submittedAt: req.submittedAt,
-      request: req,
-    }));
-    const inviteItems = pendingCoResearcherInvitesForProject.map((inv) => ({
-      kind: 'invite',
-      id: inv.id,
-      submittedAt: inv.createdAt,
-      invite: inv,
-    }));
-    return [...requestItems, ...inviteItems].sort(
-      (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
-    );
-  }, [isAdmin, pendingForProjectQueue, pendingCoResearcherInvitesForProject]);
+    return pendingForProjectQueue
+      .map((req) => ({
+        kind: 'request',
+        id: req.id,
+        submittedAt: req.submittedAt,
+        request: req,
+      }))
+      .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+  }, [isAdmin, pendingForProjectQueue]);
 
   useEffect(() => {
     if (!id) return;
@@ -466,17 +431,6 @@ export default function ProjectDetail() {
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: msg, variant: 'success' } })); } catch {}
       enqueueToastForUser(approved.requestedBy, { message: msg, variant: 'success' });
       addActivity(`${user?.fullName} approved export request for project ${project?.name || approved.projectId} (requested by ${approved.requestedBy})`);
-    } else if (approved.type === 'coResearcherInvite') {
-      const invitees = Array.isArray(approved.proposedUpdates?.invitedToList) ? approved.proposedUpdates.invitedToList : [];
-      const requesterMsg = invitees.length > 0
-        ? `Admin approved your co-researcher request for ${project?.name || approved.projectId}. Invites were sent to: ${invitees.join(', ')}.`
-        : `Admin approved your co-researcher request for ${project?.name || approved.projectId}.`;
-      const approverMsg = invitees.length > 0
-        ? `Co-researcher invite request approved. Invites sent to: ${invitees.join(', ')}.`
-        : 'Co-researcher invite request approved.';
-      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'success' } })); } catch {}
-      enqueueToastForUser(approved.requestedBy, { message: requesterMsg, variant: 'success' });
-      addActivity(`${user?.fullName} approved co-researcher invite request for project ${project?.name || approved.projectId} (invitees: ${invitees.join(', ')})`);
     } else {
       const type = approved.proposedSample?.sampleType ? ` (${approved.proposedSample.sampleType})` : '';
       const msg = `Add request approved. Sample ${approved.sampleId}${type} has been added.`;
@@ -493,19 +447,6 @@ export default function ProjectDetail() {
       try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: 'Export request rejected.', variant: 'error' } })); } catch {}
       enqueueToastForUser(rejected.requestedBy, { message: 'Export request rejected.', variant: 'error' });
       addActivity(`${user?.fullName} rejected export request for project ${project?.name || rejected.projectId} (requested by ${rejected.requestedBy})`);
-      return;
-    }
-    if (rejected.type === 'coResearcherInvite') {
-      const invitees = Array.isArray(rejected.proposedUpdates?.invitedToList) ? rejected.proposedUpdates.invitedToList : [];
-      const requesterMsg = invitees.length > 0
-        ? `Admin declined your co-researcher request for ${project?.name || rejected.projectId}. No invite was sent to: ${invitees.join(', ')}.`
-        : `Admin declined your co-researcher request for ${project?.name || rejected.projectId}.`;
-      const approverMsg = invitees.length > 0
-        ? `Co-researcher invite request declined. No invite sent to: ${invitees.join(', ')}.`
-        : 'Co-researcher invite request declined.';
-      try { window.dispatchEvent(new CustomEvent('biosample_flash', { detail: { message: approverMsg, variant: 'error' } })); } catch {}
-      enqueueToastForUser(rejected.requestedBy, { message: requesterMsg, variant: 'error' });
-      addActivity(`${user?.fullName} rejected co-researcher invite request for project ${project?.name || rejected.projectId}`);
       return;
     }
     const kind = rejected.type === 'edit' ? 'Edit' : rejected.type === 'delete' ? 'Delete' : 'Add';
@@ -630,73 +571,7 @@ export default function ProjectDetail() {
         </dl>
       </div>
 
-      {myCoResearcherInviteAwaitingAdmin && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl shadow-sm p-4 space-y-2">
-          <h2 className="font-semibold text-amber-950">Awaiting admin approval</h2>
-          <p className="text-sm text-amber-900">
-            Your request to invite{' '}
-            <span className="font-medium">
-              {(Array.isArray(myCoResearcherInviteAwaitingAdmin.proposedUpdates?.invitedToList)
-                ? myCoResearcherInviteAwaitingAdmin.proposedUpdates.invitedToList.join(', ')
-                : 'co-researchers')}
-            </span>{' '}
-            is pending review by an administrator. You will get a notification when it is approved or declined.
-          </p>
-          <p className="text-xs text-amber-800/90">
-            Submitted {myCoResearcherInviteAwaitingAdmin.submittedAt
-              ? new Date(myCoResearcherInviteAwaitingAdmin.submittedAt).toLocaleString()
-              : '—'}
-          </p>
-        </div>
-      )}
-
-      {myResolvedCoResearcherInviteRequest && (
-        <div
-          className={`rounded-xl shadow-sm p-4 space-y-2 border ${
-            myResolvedCoResearcherInviteRequest.resolution === 'approved'
-              ? 'bg-emerald-50 border-emerald-200'
-              : 'bg-red-50 border-red-200'
-          }`}
-        >
-          <h2
-            className={`font-semibold ${
-              myResolvedCoResearcherInviteRequest.resolution === 'approved' ? 'text-emerald-950' : 'text-red-950'
-            }`}
-          >
-            {myResolvedCoResearcherInviteRequest.resolution === 'approved'
-              ? 'Admin approved your co-researcher request'
-              : 'Admin declined your co-researcher request'}
-          </h2>
-          <p
-            className={`text-sm ${
-              myResolvedCoResearcherInviteRequest.resolution === 'approved' ? 'text-emerald-900' : 'text-red-900'
-            }`}
-          >
-            Invitees:{' '}
-            <span className="font-medium">
-              {(Array.isArray(myResolvedCoResearcherInviteRequest.proposedUpdates?.invitedToList)
-                ? myResolvedCoResearcherInviteRequest.proposedUpdates.invitedToList.join(', ')
-                : '—')}
-            </span>
-            {myResolvedCoResearcherInviteRequest.resolution === 'approved'
-              ? '. Invitations were sent; each researcher can accept or decline here on the project or on their Projects page.'
-              : '. No invitations were sent.'}
-          </p>
-          {myResolvedCoResearcherInviteRequest.resolvedAt && (
-            <p
-              className={`text-xs ${
-                myResolvedCoResearcherInviteRequest.resolution === 'approved'
-                  ? 'text-emerald-800/90'
-                  : 'text-red-800/90'
-              }`}
-            >
-              Resolved {new Date(myResolvedCoResearcherInviteRequest.resolvedAt).toLocaleString()}
-            </p>
-          )}
-        </div>
-      )}
-
-      {!isAdmin && canSeeOutgoingCoResearcherInvites && (
+      {canSeeOutgoingCoResearcherInvites && (
         <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-semibold text-gray-800">Pending co-researcher invitations</h2>
@@ -705,20 +580,52 @@ export default function ProjectDetail() {
             </span>
           </div>
           {pendingCoResearcherInvitesForProject.length === 0 ? (
-            <p className="text-sm text-gray-500">No outstanding invites for this project.</p>
+            <p className="text-sm text-gray-500">No outstanding invitations for this project.</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {pendingCoResearcherInvitesForProject.map((inv) => (
-                <li
-                  key={inv.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border border-gray-200 rounded-lg px-3 py-2"
-                >
-                  <span className="font-medium text-gray-800">{inv.invitedTo}</span>
-                  <span className="text-xs text-gray-500">
-                    Invited by {inv.invitedBy} · {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
-                  </span>
-                </li>
-              ))}
+              {pendingCoResearcherInvitesForProject.map((inv) => {
+                const canCancel = isAdmin
+                  || isLeadResearcher
+                  || displayNamesEqual(inv.invitedBy, user?.fullName);
+                return (
+                  <li
+                    key={inv.id}
+                    className="flex flex-wrap items-center justify-between gap-2 border border-gray-200 rounded-lg px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-800">{inv.invitedTo}</p>
+                      <p className="text-xs text-gray-500">
+                        Invited by {inv.invitedBy} · {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
+                      </p>
+                    </div>
+                    {canCancel && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = await cancelCoResearcherInvite(inv.id);
+                          if (!ok) {
+                            try {
+                              window.dispatchEvent(new CustomEvent('biosample_flash', {
+                                detail: { message: 'Could not cancel the invitation. Please try again.', variant: 'error' },
+                              }));
+                            } catch {}
+                            return;
+                          }
+                          try {
+                            window.dispatchEvent(new CustomEvent('biosample_flash', {
+                              detail: { message: `Invitation to ${inv.invitedTo} was cancelled.`, variant: 'success' },
+                            }));
+                          } catch {}
+                          addActivity(`${user?.fullName} cancelled co-researcher invite for ${inv.invitedTo} on project ${project.name}`);
+                        }}
+                        className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 text-gray-700"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <p className="text-xs text-gray-500">
@@ -794,25 +701,6 @@ export default function ProjectDetail() {
           ) : (
             <div className="space-y-2">
               {(isAdmin ? adminPendingItems : pendingForProjectQueue).map((item) => {
-                if (isAdmin && item.kind === 'invite') {
-                  const inv = item.invite;
-                  return (
-                    <div key={inv.id} className="border border-gray-200 rounded-lg p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm">
-                          <p className="font-medium text-gray-800">Co-Researcher Invitation</p>
-                          <p className="text-xs text-gray-500">
-                            Invited by <span className="font-medium">{inv.invitedBy}</span> · {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1">
-                            Pending response from: {inv.invitedTo || '—'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
                 const req = isAdmin ? item.request : item;
                 return (
                   <div key={req.id} className="border border-gray-200 rounded-lg p-3">
@@ -821,14 +709,12 @@ export default function ProjectDetail() {
                         <p className="font-medium text-gray-800">
                           {req.type === 'export'
                             ? 'Export Request'
-                            : req.type === 'coResearcherInvite'
-                              ? 'Co-Researcher Invite Request'
                             : req.type === 'add'
                               ? 'Add Request'
                               : req.type === 'edit'
                                 ? 'Edit Request'
                                 : 'Delete Request'}
-                          {!['export', 'coResearcherInvite'].includes(req.type) && (
+                          {req.type !== 'export' && (
                             <>
                               <span className="text-gray-400 font-normal"> · </span>
                               <span className="font-mono">{req.sampleId}</span>
@@ -841,11 +727,6 @@ export default function ProjectDetail() {
                         {req.type === 'export' && (
                           <p className="text-xs text-gray-600 mt-1">
                             Requesting CSV export of their own samples in this project
-                          </p>
-                        )}
-                        {req.type === 'coResearcherInvite' && (
-                          <p className="text-xs text-gray-600 mt-1">
-                            Requested co-researcher invite approval for: {(req.proposedUpdates?.invitedToList || []).join(', ') || '—'}
                           </p>
                         )}
                       </div>
@@ -1142,9 +1023,7 @@ export default function ProjectDetail() {
                   <p className="text-sm text-gray-600">
                     <span className="font-medium text-gray-800">{project.name}</span>
                     {' — '}
-                    {isAdmin
-                      ? 'Invitations are sent immediately. Each person can accept or decline from their Projects page or here on this project.'
-                      : 'Your selections are sent to an administrator for approval. When approved, each person receives an invitation.'}
+                    Invitations are sent immediately. Each person can accept or decline from their Projects page or here on this project. You can cancel any pending invitation from the list below.
                   </p>
                   {inviteableCoResearcherNames.length === 0 ? (
                     <p className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-4 bg-gray-50">
@@ -1192,7 +1071,7 @@ export default function ProjectDetail() {
                       disabled={inviteableCoResearcherNames.length === 0}
                       className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity disabled:opacity-50 disabled:pointer-events-none"
                     >
-                      {isAdmin ? 'Send invitations' : 'Submit request'}
+                      Send invitations
                     </button>
                   </div>
                 </div>
