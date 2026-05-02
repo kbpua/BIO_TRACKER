@@ -30,6 +30,15 @@ function mapPendingRequestType(type) {
   return s;
 }
 
+function pendingRequestTypeLabel(type) {
+  const t = String(type ?? '').toLowerCase();
+  if (t === 'add') return 'add';
+  if (t === 'edit') return 'edit';
+  if (t === 'delete') return 'delete';
+  if (t === 'export') return 'export';
+  return 'request';
+}
+
 function mapPendingRequestFromDb(r) {
   const resRaw = r.resolution;
   const resolution = resRaw != null && String(resRaw).trim() !== '' ? String(resRaw).trim() : null;
@@ -1793,6 +1802,96 @@ export function DataProvider({ children }) {
     return true;
   }, [supabaseEnabled, users]);
 
+  const removeCoResearcherFromProject = useCallback(async (projectId, coResearcherFullName) => {
+    const pid = String(projectId || '').trim();
+    const removedNorm = normalizePersonName(coResearcherFullName);
+    if (!pid || !removedNorm) return { ok: false, error: 'Missing project or co-researcher.' };
+
+    const project = projects.find((p) => p.id === pid);
+    if (!project) return { ok: false, error: 'Project not found.' };
+
+    const isAdminUser = user?.role === 'Admin';
+    const isLead = displayNamesEqual(project.leadResearcher, user?.fullName);
+    if (!isAdminUser && !isLead) {
+      return { ok: false, error: 'Only the lead researcher or an admin can remove co-researchers.' };
+    }
+
+    if (displayNamesEqual(removedNorm, project.leadResearcher)) {
+      return { ok: false, error: 'The lead researcher cannot be removed from co-researchers.' };
+    }
+
+    const coList = Array.isArray(project.coResearchers) ? project.coResearchers : [];
+    if (!coList.some((n) => displayNamesEqual(n, removedNorm))) {
+      return { ok: false, error: 'This person is not listed as a co-researcher.' };
+    }
+
+    const updatedCo = coList.filter((n) => !displayNamesEqual(n, removedNorm));
+    const projectName = project.name || pid;
+    const actorName = user?.fullName || 'Administrator';
+
+    const cancellableTypes = new Set(['add', 'edit', 'delete', 'export']);
+    const toCancel = pendingRequestsRef.current.filter(
+      (r) =>
+        String(r.projectId || '').trim() === pid
+        && displayNamesEqual(r.requestedBy, removedNorm)
+        && !r.resolution
+        && cancellableTypes.has(String(r.type ?? '').toLowerCase())
+    );
+
+    const idsToRemove = [...new Set(toCancel.map((r) => String(r.id || '').trim()).filter(Boolean))];
+
+    if (idsToRemove.length > 0) {
+      setPendingRequests((prev) => prev.filter((r) => !idsToRemove.includes(String(r.id || '').trim())));
+      if (supabaseEnabled && supabase) {
+        const { error } = await supabase.from('pending_requests').delete().in('id', idsToRemove);
+        if (error) console.error('Failed to delete cancelled pending requests:', error.message);
+      }
+    }
+
+    updateProject(pid, { coResearchers: updatedCo });
+
+    for (const req of toCancel) {
+      const tw = pendingRequestTypeLabel(req.type);
+      void notifyUserByName({
+        fullName: removedNorm,
+        type: 'APPROVAL_RESULT',
+        title: 'Request cancelled',
+        description: `Your ${tw} request on ${projectName} has been cancelled because you were removed from the project.`,
+        linkTo: '/projects',
+        targetEntity: 'project',
+        targetId: pid,
+      });
+    }
+
+    void notifyUserByName({
+      fullName: removedNorm,
+      type: 'PROJECT_EVENT',
+      title: 'Removed from Project',
+      description: `You have been removed from ${projectName} by ${actorName}. You no longer have Co-Researcher access to this project.`,
+      linkTo: '/projects',
+      targetEntity: 'project',
+      targetId: pid,
+    });
+
+    addActivity(`${actorName} removed ${removedNorm} from ${projectName}.`);
+
+    await refreshInvitesAndRequests();
+    await refreshNotifications();
+
+    return { ok: true };
+  }, [
+    addActivity,
+    notifyUserByName,
+    projects,
+    refreshInvitesAndRequests,
+    refreshNotifications,
+    supabase,
+    supabaseEnabled,
+    updateProject,
+    user?.fullName,
+    user?.role,
+  ]);
+
   const pendingCount = users.filter((u) => u.status === 'Pending').length;
 
   const value = {
@@ -1818,6 +1917,7 @@ export function DataProvider({ children }) {
     sendCoResearcherInvites,
     cancelCoResearcherInvite,
     respondToCoResearcherInvite,
+    removeCoResearcherFromProject,
     addActivity,
     addProject,
     updateProject,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
-import { Check, X } from 'lucide-react';
+import { Check, Trash2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
@@ -14,6 +14,7 @@ import {
   getVisibleSamples,
   getProjectPublicationStatus,
 } from '../utils/visibility';
+import RemoveCoResearcherModal from '../components/RemoveCoResearcherModal';
 import { ViewIconLink, EditIconButton, DeleteIconButton } from '../components/TableActionButtons';
 import {
   displayNamesEqual,
@@ -21,25 +22,47 @@ import {
   PENDING_CO_RESEARCHER_INVITES_HASH,
 } from '../utils/personName';
 
-/** Short label for the projects table; hover shows the full comma-separated list. */
-function summarizeCoResearchers(names, maxVisible = 2) {
-  if (!Array.isArray(names) || names.length === 0) {
-    return { label: '—', title: undefined };
+const coResearcherTagClass =
+  'inline-flex max-w-[12rem] truncate rounded-full border border-teal-200 bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:border-teal-500/60 dark:bg-teal-900/50 dark:text-teal-300';
+
+/** Co-Researchers column: teal pills; 3+ shows first two + "+N more" with tooltip for the rest. */
+function CoResearchersTableCell({ names }) {
+  const list = Array.isArray(names) ? names.map((n) => String(n).trim()).filter(Boolean) : [];
+  if (list.length === 0) {
+    return <span className="text-gray-500 dark:text-slate-400">—</span>;
   }
-  const filtered = names.map((n) => String(n).trim()).filter(Boolean);
-  if (filtered.length === 0) {
-    return { label: '—', title: undefined };
+
+  if (list.length <= 2) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+        {list.map((name, idx) => (
+          <span key={`${name}-${idx}`} className={coResearcherTagClass} title={name}>
+            {name}
+          </span>
+        ))}
+      </div>
+    );
   }
-  const fullList = filtered.join(', ');
-  if (filtered.length <= maxVisible) {
-    return { label: fullList, title: fullList };
-  }
-  const head = filtered.slice(0, maxVisible).join(', ');
-  const extra = filtered.length - maxVisible;
-  return {
-    label: `${head} +${extra} more`,
-    title: fullList,
-  };
+
+  const shown = list.slice(0, 2);
+  const rest = list.slice(2);
+  const restTooltip = rest.join(', ');
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+      {shown.map((name, idx) => (
+        <span key={`${name}-${idx}`} className={coResearcherTagClass} title={name}>
+          {name}
+        </span>
+      ))}
+      <span
+        className="inline-flex cursor-default rounded-full border border-teal-300/90 bg-teal-50/90 px-2 py-0.5 text-xs font-medium text-teal-900 shadow-sm dark:border-teal-500/45 dark:bg-teal-950/55 dark:text-teal-200"
+        title={restTooltip}
+      >
+        +{rest.length} more
+      </span>
+    </div>
+  );
 }
 
 function ProjectForm({
@@ -50,11 +73,13 @@ function ProjectForm({
   canEditLeadResearcher,
   coResearcherInvites,
 }) {
-  const { users, projects } = useData();
+  const { users, projects, removeCoResearcherFromProject } = useData();
+  const { user, isAdmin, isResearcher } = useAuth();
   const [sbProfiles, setSbProfiles] = useState([]);
   const [coSearch, setCoSearch] = useState('');
   const [coDropdownOpen, setCoDropdownOpen] = useState(false);
   const [coHighlightedNames, setCoHighlightedNames] = useState([]);
+  const [removeCoTarget, setRemoveCoTarget] = useState(null);
   const coDropdownRef = useRef(null);
 
   useEffect(() => {
@@ -260,7 +285,46 @@ function ProjectForm({
     }));
   };
 
+  const canRemoveCoResearchers = useMemo(() => {
+    if (!isEdit || !project?.id) return false;
+    if (isAdmin) return true;
+    return isResearcher && displayNamesEqual(project.leadResearcher, user?.fullName);
+  }, [isEdit, project, isAdmin, isResearcher, user?.fullName]);
+
+  const handleConfirmedCoResearcherRemoval = async () => {
+    const targetName = removeCoTarget;
+    if (!project?.id || !targetName) return { ok: false, error: 'Invalid state.' };
+    const res = await removeCoResearcherFromProject(project.id, targetName);
+    if (res.ok) {
+      setForm((f) => ({
+        ...f,
+        coResearchers: (Array.isArray(f.coResearchers) ? f.coResearchers : []).filter(
+          (n) => !displayNamesEqual(n, targetName)
+        ),
+      }));
+      setRemoveCoTarget(null);
+      try {
+        window.dispatchEvent(
+          new CustomEvent('biosample_flash', {
+            detail: {
+              message: `${targetName} has been removed from ${project.name}.`,
+              variant: 'success',
+            },
+          })
+        );
+      } catch {}
+    } else if (res.error) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('biosample_flash', { detail: { message: res.error, variant: 'error' } })
+        );
+      } catch {}
+    }
+    return res;
+  };
+
   return (
+    <>
     <form
       onSubmit={async (e) => {
         e.preventDefault();
@@ -288,7 +352,7 @@ function ProjectForm({
         form.name && form.startDate && (
           <div className="p-3 rounded-lg bg-mint-50 border border-mint-200">
             <label className="block text-sm font-medium text-mint-800 mb-1">Generated Project ID (preview)</label>
-            <p className="font-mono font-semibold text-mint-800">{previewId}</p>
+            <p className="font-semibold text-mint-800">{previewId}</p>
             <p className="text-xs text-gray-500 mt-1">This ID will be assigned when you submit.</p>
           </div>
         )
@@ -462,6 +526,17 @@ function ProjectForm({
                         <X className="h-3 w-3" />
                       </button>
                     )}
+                    {status === 'confirmed' && canRemoveCoResearchers && (
+                      <button
+                        type="button"
+                        onClick={() => setRemoveCoTarget(name)}
+                        className="inline-flex items-center justify-center rounded-full p-0.5 hover:bg-red-100 dark:hover:bg-red-900/40"
+                        aria-label={`Remove co-researcher ${name}`}
+                        title="Remove from project"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" strokeWidth={2} aria-hidden />
+                      </button>
+                    )}
                   </span>
                 );
               })}
@@ -500,6 +575,14 @@ function ProjectForm({
         </button>
       </div>
     </form>
+    <RemoveCoResearcherModal
+      open={Boolean(removeCoTarget)}
+      onClose={() => setRemoveCoTarget(null)}
+      coResearcherName={removeCoTarget || ''}
+      projectName={project?.name || ''}
+      onConfirm={handleConfirmedCoResearcherRemoval}
+    />
+    </>
   );
 }
 
@@ -514,6 +597,7 @@ export default function Projects() {
     deleteProject,
     sendCoResearcherInvites,
     coResearcherInvites,
+    cancelCoResearcherInvite,
     respondToCoResearcherInvite,
     addActivity,
     refreshInvitesAndRequests,
@@ -559,6 +643,15 @@ export default function Projects() {
   }, [refreshInvitesAndRequests]);
 
   const myInvites = (coResearcherInvites || []).filter((i) => isPendingCoResearcherInviteForUser(i, user));
+
+  /** Pending invites this user sent — same rows as project “Pending Requests”; lets you cancel from the list view. */
+  const myOutgoingPendingInvites = useMemo(() => {
+    if (!user?.fullName) return [];
+    return (coResearcherInvites || []).filter((inv) => {
+      const pending = String(inv.status ?? '').toLowerCase() === 'pending';
+      return pending && displayNamesEqual(inv.invitedBy, user.fullName);
+    });
+  }, [coResearcherInvites, user?.fullName]);
 
   useEffect(() => {
     if (location.pathname !== '/projects') return;
@@ -751,6 +844,92 @@ export default function Projects() {
       </header>
 
       <div className="space-y-4">
+      {myOutgoingPendingInvites.length > 0 && (
+        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold text-gray-800 dark:text-slate-100">Invitations you sent</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-mint-100 text-mint-900 dark:bg-mint-900/40 dark:text-mint-200">
+              {myOutgoingPendingInvites.length} pending
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-slate-400">
+            Waiting for the researcher to respond. You can cancel an invitation anytime before they accept.
+          </p>
+          <div className="space-y-2">
+            {myOutgoingPendingInvites.map((inv) => {
+              const proj = projects.find((p) => p.id === inv.projectId);
+              return (
+                <div
+                  key={inv.id}
+                  className="border border-gray-200 dark:border-slate-600 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
+                >
+                  <div className="text-sm min-w-0">
+                    <p className="font-medium text-gray-800 dark:text-slate-100">
+                      Invite to <span className="font-semibold">{inv.invitedTo}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                      Project:{' '}
+                      <Link
+                        to={`/projects/${inv.projectId}`}
+                        className="font-medium text-mint-700 hover:text-mint-800 dark:text-mint-300 dark:hover:text-mint-200"
+                      >
+                        {proj?.name || inv.projectId}
+                      </Link>
+                      {' · '}
+                      {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <Link
+                      to={`/projects/${inv.projectId}`}
+                      className="px-3 py-1.5 border border-gray-300 dark:border-slate-600 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-200"
+                    >
+                      Open project
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await cancelCoResearcherInvite(inv.id);
+                        if (!ok) {
+                          try {
+                            window.dispatchEvent(
+                              new CustomEvent('biosample_flash', {
+                                detail: {
+                                  message: 'Could not cancel the invitation. Please try again.',
+                                  variant: 'error',
+                                },
+                              })
+                            );
+                          } catch {}
+                          return;
+                        }
+                        try {
+                          window.dispatchEvent(
+                            new CustomEvent('biosample_flash', {
+                              detail: {
+                                message: `Invitation to ${inv.invitedTo} was cancelled.`,
+                                variant: 'success',
+                              },
+                            })
+                          );
+                        } catch {}
+                        addActivity(
+                          `${user?.fullName} cancelled co-researcher invite for ${inv.invitedTo} on project ${proj?.name || inv.projectId}`
+                        );
+                        void refreshInvitesAndRequests();
+                      }}
+                      className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:border-slate-600 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-100"
+                    >
+                      Cancel invitation
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {myInvites.length > 0 && (
         <div
           id={PENDING_CO_RESEARCHER_INVITES_HASH}
@@ -876,21 +1055,15 @@ export default function Projects() {
           <tbody>
             {filteredProjects.map((p) => {
               const publicationLabel = getProjectPublicationStatus(p);
-              const coResearchersCell = summarizeCoResearchers(p.coResearchers);
               return (
               <tr key={p.id} className="border-b border-mint-50 hover:bg-mint-50/50">
-                <td className="py-2 px-4 whitespace-nowrap font-mono text-[13px]">{p.id}</td>
+                <td className="py-2 px-4 whitespace-nowrap">{p.id}</td>
                 <td className="py-2 px-4 font-medium">{p.name}</td>
                 <td className="py-2 px-4">{p.startDate || '—'}</td>
                 <td className="py-2 px-4">{p.endDate || '—'}</td>
                 <td className="py-2 px-4">{p.leadResearcher}</td>
-                <td className="py-2 px-4 align-top max-w-[18rem]">
-                  <span
-                    className="inline-block max-w-full truncate align-top text-sm text-gray-800"
-                    title={coResearchersCell.title}
-                  >
-                    {coResearchersCell.label}
-                  </span>
+                <td className="py-2 px-4 align-top max-w-[20rem]">
+                  <CoResearchersTableCell names={p.coResearchers} />
                 </td>
                 <td className="py-2 px-4">
                   <div className="flex flex-nowrap items-center gap-2">
@@ -972,7 +1145,13 @@ export default function Projects() {
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-b-2xl bg-white px-4 py-3">
                   <ProjectForm
-                    project={modal === 'new' ? null : modal.project}
+                    project={
+                      modal === 'new'
+                        ? null
+                        : (modal.project?.id
+                          ? projects.find((p) => p.id === modal.project.id) || modal.project
+                          : modal.project)
+                    }
                     onSave={handleSave}
                     onCancel={() => setModal(null)}
                     canSetPublicationStatus={canManageProjects}

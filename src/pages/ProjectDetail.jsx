@@ -1,13 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, UserPlus } from 'lucide-react';
+import { Check, ChevronDown, Trash2, UserPlus, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { canUserChangeProjectPublication, canUserViewProject, getProjectPublicationStatus } from '../utils/visibility';
 import { displayNamesEqual, isPendingCoResearcherInviteForUser } from '../utils/personName';
 import { exportSamplesCSV } from '../utils/export';
+import RemoveCoResearcherModal from '../components/RemoveCoResearcherModal';
 import {
   ViewIconLink,
   EditIconLink,
@@ -44,6 +45,7 @@ export default function ProjectDetail() {
     sendCoResearcherInvites,
     cancelCoResearcherInvite,
     refreshInvitesAndRequests,
+    removeCoResearcherFromProject,
   } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -53,15 +55,19 @@ export default function ProjectDetail() {
   const [confirmRequestDelete, setConfirmRequestDelete] = useState(null);
   const [coInviteModalOpen, setCoInviteModalOpen] = useState(false);
   const [coInviteSelection, setCoInviteSelection] = useState(() => new Set());
+  const [coInviteSearch, setCoInviteSearch] = useState('');
+  const [coInviteDropdownOpen, setCoInviteDropdownOpen] = useState(false);
+  const coInviteDropdownRef = useRef(null);
   const [sbInviteProfiles, setSbInviteProfiles] = useState([]);
-  const [pendingRequestsExpanded, setPendingRequestsExpanded] = useState(false);
+  const [pendingRequestsExpanded, setPendingRequestsExpanded] = useState(true);
+  const [removeCoResearcherTarget, setRemoveCoResearcherTarget] = useState(null);
 
   useEffect(() => {
     if (!coInviteModalOpen || !isSupabaseConfigured() || !supabase) return;
     let cancelled = false;
     supabase
       .from('profiles')
-      .select('full_name, role, status')
+      .select('full_name, role, status, email')
       .in('role', ['Researcher', 'Admin'])
       .eq('status', 'Active')
       .then(({ data }) => {
@@ -75,6 +81,7 @@ export default function ProjectDetail() {
   const getProjName = (pid) => projects.find((p) => p.id === pid)?.name ?? '';
 
   const isLeadResearcher = isResearcher && displayNamesEqual(project?.leadResearcher, user?.fullName);
+  const canRemoveCoResearchers = isAdmin || isLeadResearcher;
   const isCoResearcher = isResearcher && Array.isArray(project?.coResearchers)
     && project.coResearchers.some((n) => displayNamesEqual(n, user?.fullName));
   const canAddSample = isAdmin || isLeadResearcher || isCoResearcher;
@@ -245,9 +252,67 @@ export default function ProjectDetail() {
     }).sort((a, b) => a.localeCompare(b));
   }, [project, users, sbInviteProfiles, pendingCoResearcherInvitesForProject]);
 
+  const inviteableResearchersWithMeta = useMemo(() => {
+    const resolveEmail = (name) => {
+      const u = (users || []).find((x) => x.fullName && displayNamesEqual(x.fullName, name));
+      if (u?.email) return u.email;
+      const p = (sbInviteProfiles || []).find((x) => x.full_name && displayNamesEqual(x.full_name, name));
+      return p?.email || '';
+    };
+    return inviteableCoResearcherNames
+      .map((name) => ({ name, email: resolveEmail(name) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [inviteableCoResearcherNames, users, sbInviteProfiles]);
+
+  const filteredInviteResearchers = useMemo(() => {
+    const q = coInviteSearch.trim().toLowerCase();
+    if (!q) return inviteableResearchersWithMeta;
+    return inviteableResearchersWithMeta.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q)
+        || (r.email || '').toLowerCase().includes(q)
+    );
+  }, [inviteableResearchersWithMeta, coInviteSearch]);
+
   useEffect(() => {
-    if (coInviteModalOpen) setCoInviteSelection(new Set());
+    if (!coInviteModalOpen) return;
+    setCoInviteSelection(new Set());
+    setCoInviteSearch('');
+    setCoInviteDropdownOpen(false);
   }, [coInviteModalOpen]);
+
+  useEffect(() => {
+    if (!coInviteDropdownOpen) return;
+    const onMouseDown = (event) => {
+      if (coInviteDropdownRef.current && !coInviteDropdownRef.current.contains(event.target)) {
+        setCoInviteDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [coInviteDropdownOpen]);
+
+  const toggleInviteResearcherPick = (name) => {
+    setCoInviteSelection((prev) => {
+      const next = new Set(prev);
+      const existing = [...next].find((n) => displayNamesEqual(n, name));
+      if (existing) next.delete(existing);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const removeInvitePick = (name) => {
+    setCoInviteSelection((prev) => {
+      const next = new Set(prev);
+      const existing = [...next].find((n) => displayNamesEqual(n, name));
+      if (existing) next.delete(existing);
+      return next;
+    });
+  };
+
+  const isInviteResearcherSelected = (name) =>
+    [...coInviteSelection].some((n) => displayNamesEqual(n, name));
 
   const handleSubmitCoResearcherInvites = async () => {
     if (!project) return;
@@ -611,7 +676,33 @@ export default function ProjectDetail() {
           <div><dt className="text-gray-500">Lead Researcher</dt><dd>{project.leadResearcher || '—'}</dd></div>
           <div className="sm:col-span-2">
             <dt className="text-gray-500">Co-Researchers</dt>
-            <dd>{(Array.isArray(project.coResearchers) && project.coResearchers.length > 0) ? project.coResearchers.join(', ') : '—'}</dd>
+            <dd>
+              {Array.isArray(project.coResearchers) && project.coResearchers.length > 0 ? (
+                <ul className="flex flex-wrap gap-2 mt-1">
+                  {project.coResearchers.map((name) => (
+                    <li
+                      key={name}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-100 px-2.5 py-1 text-xs text-teal-900 dark:border-teal-500/60 dark:bg-teal-900/50 dark:text-teal-300"
+                    >
+                      <span>{name}</span>
+                      {canRemoveCoResearchers && (
+                        <button
+                          type="button"
+                          onClick={() => setRemoveCoResearcherTarget(name)}
+                          className="inline-flex items-center justify-center rounded-full p-0.5 hover:bg-red-100 dark:hover:bg-red-900/40"
+                          aria-label={`Remove co-researcher ${name}`}
+                          title="Remove from project"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" strokeWidth={2} aria-hidden />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                '—'
+              )}
+            </dd>
           </div>
           <div><dt className="text-gray-500">Status</dt><dd>{project.status}</dd></div>
           <div><dt className="text-gray-500">Publication Status</dt><dd>{pubStatus}</dd></div>
@@ -710,6 +801,12 @@ export default function ProjectDetail() {
               )}
             </span>
           </button>
+
+          {unifiedPendingItems.length > 0 && !pendingRequestsExpanded && (
+            <p className="text-xs text-gray-500 mt-2 px-1">
+              Expand this section to cancel a co-researcher invitation or review sample requests.
+            </p>
+          )}
 
           {unifiedPendingItems.length === 0 ? (
             <p className="text-sm text-gray-500 mt-2">No pending requests.</p>
@@ -1095,56 +1192,119 @@ export default function ProjectDetail() {
                     ×
                   </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-b-2xl bg-white px-4 py-4 space-y-4">
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-800">{project.name}</span>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-b-2xl bg-white dark:bg-slate-900 px-4 py-4 space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-slate-300">
+                    <span className="font-medium text-gray-800 dark:text-slate-100">{project.name}</span>
                     {' — '}
-                    Invitations are sent immediately. Each person can accept or decline from their Projects page or here on this project. You can cancel any pending invitation from the list below.
+                    Invitations are sent immediately. Each person can accept or decline from their Projects page or here on this project. You can cancel any pending invitation from the pending list on this page.
                   </p>
-                  {inviteableCoResearcherNames.length === 0 ? (
-                    <p className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-4 bg-gray-50">
+
+                  {inviteableResearchersWithMeta.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-4 bg-gray-50 dark:bg-slate-800/80">
                       No eligible people to invite right now (everyone listed may already be on the team, be the lead researcher, or have a pending invitation).
                     </p>
                   ) : (
-                    <div className="border border-gray-200 rounded-lg p-3 max-h-60 overflow-auto space-y-2">
-                      {inviteableCoResearcherNames.map((name) => {
-                        const checked = coInviteSelection.has(name);
-                        return (
-                          <label
-                            key={name}
-                            className="flex items-center gap-2 text-sm text-gray-800 select-none cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                setCoInviteSelection((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(name)) next.delete(name);
-                                  else next.add(name);
-                                  return next;
-                                });
-                              }}
-                              className="h-4 w-4 accent-mint-600 shrink-0"
-                            />
-                            <span>{name}</span>
-                          </label>
-                        );
-                      })}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
+                        Researchers to invite
+                      </label>
+                      <div className="relative" ref={coInviteDropdownRef}>
+                        <input
+                          type="text"
+                          value={coInviteSearch}
+                          onChange={(e) => {
+                            setCoInviteSearch(e.target.value);
+                            if (!coInviteDropdownOpen) setCoInviteDropdownOpen(true);
+                          }}
+                          onFocus={() => setCoInviteDropdownOpen(true)}
+                          placeholder="Search researchers by name..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-mint-500/30"
+                        />
+
+                        {coInviteDropdownOpen && (
+                          <div className="absolute z-30 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-900 overflow-hidden">
+                            <div className="max-h-72 overflow-y-auto">
+                              {filteredInviteResearchers.length === 0 ? (
+                                <p className="px-3 py-3 text-sm text-gray-500 dark:text-slate-400">
+                                  No researchers found.
+                                </p>
+                              ) : (
+                                filteredInviteResearchers.map((researcher) => {
+                                  const selected = isInviteResearcherSelected(researcher.name);
+                                  return (
+                                    <button
+                                      key={researcher.name}
+                                      type="button"
+                                      onClick={() => toggleInviteResearcherPick(researcher.name)}
+                                      className={`w-full text-left px-3 py-2.5 border-b border-gray-100 last:border-b-0 dark:border-slate-700 transition-colors ${
+                                        selected
+                                          ? 'bg-teal-100/80 text-teal-900 dark:bg-teal-900/45 dark:text-teal-100'
+                                          : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-100'
+                                      }`}
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-medium truncate">{researcher.name}</p>
+                                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                                            {researcher.email || 'No email available'}
+                                          </p>
+                                        </div>
+                                        {selected && (
+                                          <Check className="h-4 w-4 shrink-0 mt-0.5 text-teal-700 dark:text-teal-200" aria-hidden />
+                                        )}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                            <div className="p-2 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900">
+                              <button
+                                type="button"
+                                onClick={() => setCoInviteDropdownOpen(false)}
+                                className="w-full px-3 py-2 rounded-lg bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium hover:opacity-95 transition-opacity"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {coInviteSelection.size > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {[...coInviteSelection].map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-teal-400 bg-white px-2.5 py-1 text-xs text-teal-700 dark:border-teal-300 dark:bg-transparent dark:text-teal-200"
+                            >
+                              <span>{name}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeInvitePick(name)}
+                                className="inline-flex items-center justify-center rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                                aria-label={`Remove ${name} from invite list`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="flex flex-wrap justify-end gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => setCoInviteModalOpen(false)}
-                      className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50"
+                      className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleSubmitCoResearcherInvites()}
-                      disabled={inviteableCoResearcherNames.length === 0}
+                      disabled={inviteableResearchersWithMeta.length === 0 || coInviteSelection.size === 0}
                       className="px-4 py-2 bg-mint-800 bg-gradient-to-r from-[#0F766E] to-[#115E59] text-white text-sm font-medium rounded-lg hover:opacity-95 transition-opacity disabled:opacity-50 disabled:pointer-events-none"
                     >
                       Send invitations
@@ -1156,6 +1316,36 @@ export default function ProjectDetail() {
           </div>,
           document.body
         )}
+      <RemoveCoResearcherModal
+        open={Boolean(removeCoResearcherTarget)}
+        onClose={() => setRemoveCoResearcherTarget(null)}
+        coResearcherName={removeCoResearcherTarget || ''}
+        projectName={project?.name || ''}
+        onConfirm={async () => {
+          if (!project?.id || !removeCoResearcherTarget) return { ok: false };
+          const target = removeCoResearcherTarget;
+          const res = await removeCoResearcherFromProject(project.id, target);
+          if (res.ok) {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('biosample_flash', {
+                  detail: {
+                    message: `${target} has been removed from ${project.name}.`,
+                    variant: 'success',
+                  },
+                })
+              );
+            } catch {}
+          } else if (res.error) {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('biosample_flash', { detail: { message: res.error, variant: 'error' } })
+              );
+            } catch {}
+          }
+          return res;
+        }}
+      />
     </div>
   );
 }
