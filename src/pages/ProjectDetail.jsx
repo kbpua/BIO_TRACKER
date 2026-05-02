@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { UserPlus } from 'lucide-react';
+import { ChevronDown, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
@@ -54,6 +54,7 @@ export default function ProjectDetail() {
   const [coInviteModalOpen, setCoInviteModalOpen] = useState(false);
   const [coInviteSelection, setCoInviteSelection] = useState(() => new Set());
   const [sbInviteProfiles, setSbInviteProfiles] = useState([]);
+  const [pendingRequestsExpanded, setPendingRequestsExpanded] = useState(false);
 
   useEffect(() => {
     if (!coInviteModalOpen || !isSupabaseConfigured() || !supabase) return;
@@ -368,6 +369,52 @@ export default function ProjectDetail() {
       .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
   }, [isAdmin, pendingForProjectQueue]);
 
+  const unifiedPendingItems = useMemo(() => {
+    const rows = [];
+    if (canSeeOutgoingCoResearcherInvites) {
+      for (const inv of pendingCoResearcherInvitesForProject) {
+        rows.push({
+          kind: 'coInvite',
+          id: `co-inv-${inv.id}`,
+          sortAt: inv.createdAt,
+          invite: inv,
+        });
+      }
+    }
+    if (canSeePendingQueue) {
+      if (isAdmin) {
+        for (const item of adminPendingItems) {
+          rows.push({
+            kind: 'sampleRequest',
+            id: `req-${item.request.id}`,
+            sortAt: item.request.submittedAt,
+            request: item.request,
+          });
+        }
+      } else {
+        for (const req of pendingForProjectQueue) {
+          rows.push({
+            kind: 'sampleRequest',
+            id: `req-${req.id}`,
+            sortAt: req.submittedAt,
+            request: req,
+          });
+        }
+      }
+    }
+    rows.sort(
+      (a, b) => new Date(b.sortAt || 0).getTime() - new Date(a.sortAt || 0).getTime()
+    );
+    return rows;
+  }, [
+    canSeeOutgoingCoResearcherInvites,
+    canSeePendingQueue,
+    pendingCoResearcherInvitesForProject,
+    isAdmin,
+    adminPendingItems,
+    pendingForProjectQueue,
+  ]);
+
   useEffect(() => {
     if (!id) return;
     void refreshInvitesAndRequests();
@@ -571,69 +618,6 @@ export default function ProjectDetail() {
         </dl>
       </div>
 
-      {canSeeOutgoingCoResearcherInvites && (
-        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold text-gray-800">Pending co-researcher invitations</h2>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-              {pendingCoResearcherInvitesForProject.length} pending
-            </span>
-          </div>
-          {pendingCoResearcherInvitesForProject.length === 0 ? (
-            <p className="text-sm text-gray-500">No outstanding invitations for this project.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {pendingCoResearcherInvitesForProject.map((inv) => {
-                const canCancel = isAdmin
-                  || isLeadResearcher
-                  || displayNamesEqual(inv.invitedBy, user?.fullName);
-                return (
-                  <li
-                    key={inv.id}
-                    className="flex flex-wrap items-center justify-between gap-2 border border-gray-200 rounded-lg px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-800">{inv.invitedTo}</p>
-                      <p className="text-xs text-gray-500">
-                        Invited by {inv.invitedBy} · {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
-                      </p>
-                    </div>
-                    {canCancel && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const ok = await cancelCoResearcherInvite(inv.id);
-                          if (!ok) {
-                            try {
-                              window.dispatchEvent(new CustomEvent('biosample_flash', {
-                                detail: { message: 'Could not cancel the invitation. Please try again.', variant: 'error' },
-                              }));
-                            } catch {}
-                            return;
-                          }
-                          try {
-                            window.dispatchEvent(new CustomEvent('biosample_flash', {
-                              detail: { message: `Invitation to ${inv.invitedTo} was cancelled.`, variant: 'success' },
-                            }));
-                          } catch {}
-                          addActivity(`${user?.fullName} cancelled co-researcher invite for ${inv.invitedTo} on project ${project.name}`);
-                        }}
-                        className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 text-gray-700"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p className="text-xs text-gray-500">
-            Invited researchers accept or decline on this project page or under Co-Researcher Invitations on Projects.
-          </p>
-        </div>
-      )}
-
       {myPendingCoResearcherInvite && (
         <div className="bg-mint-50 border border-mint-200 rounded-xl shadow-sm p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -688,22 +672,107 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {canSeePendingQueue && (
-        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold text-gray-800">Pending Requests</h2>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-              {isAdmin ? adminPendingItems.length : pendingForProjectQueue.length} pending requests
+      {(canSeePendingQueue || canSeeOutgoingCoResearcherInvites) && (
+        <div className="bg-white rounded-xl border border-mint-100 shadow-sm p-4">
+          <button
+            type="button"
+            id="pending-requests-trigger"
+            aria-expanded={pendingRequestsExpanded}
+            aria-controls="pending-requests-panel"
+            aria-label={
+              unifiedPendingItems.length === 0
+                ? 'Pending requests'
+                : pendingRequestsExpanded
+                  ? 'Collapse pending requests list'
+                  : 'Expand pending requests list'
+            }
+            disabled={unifiedPendingItems.length === 0}
+            onClick={() => {
+              if (unifiedPendingItems.length === 0) return;
+              setPendingRequestsExpanded((open) => !open);
+            }}
+            className={`flex w-full items-center justify-between gap-3 rounded-lg text-left min-h-[2.75rem] px-2 py-2 -mx-2 transition-colors ${
+              unifiedPendingItems.length === 0
+                ? 'cursor-default opacity-90'
+                : 'hover:bg-gray-50 cursor-pointer'
+            }`}
+          >
+            <span className="font-semibold text-gray-800 text-base">Pending Requests</span>
+            <span className="flex items-center gap-2 shrink-0">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                {unifiedPendingItems.length} pending {unifiedPendingItems.length === 1 ? 'request' : 'requests'}
+              </span>
+              {unifiedPendingItems.length > 0 && (
+                <ChevronDown
+                  className={`h-5 w-5 text-gray-600 transition-transform duration-200 shrink-0 ${pendingRequestsExpanded ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              )}
             </span>
-          </div>
-          {(isAdmin ? adminPendingItems.length === 0 : pendingForProjectQueue.length === 0) ? (
-            <p className="text-sm text-gray-500">No pending requests.</p>
+          </button>
+
+          {unifiedPendingItems.length === 0 ? (
+            <p className="text-sm text-gray-500 mt-2">No pending requests.</p>
           ) : (
-            <div className="space-y-2">
-              {(isAdmin ? adminPendingItems : pendingForProjectQueue).map((item) => {
-                const req = isAdmin ? item.request : item;
+            pendingRequestsExpanded && (
+              <div id="pending-requests-panel" className="space-y-3 mt-3 pt-3 border-t border-mint-100">
+                <div
+                  className={
+                    unifiedPendingItems.length > 3
+                      ? 'space-y-2 max-h-[min(26rem,55vh)] min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-0.5'
+                      : 'space-y-2'
+                  }
+                >
+                  {unifiedPendingItems.map((row) => {
+                if (row.kind === 'coInvite') {
+                  const inv = row.invite;
+                  const canCancel = isAdmin
+                    || isLeadResearcher
+                    || displayNamesEqual(inv.invitedBy, user?.fullName);
+                  return (
+                    <div key={row.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm min-w-0">
+                          <p className="font-medium text-gray-800">Co-Researcher Invitation · {inv.invitedTo}</p>
+                          <p className="text-xs text-gray-500">
+                            Invited by <span className="font-medium">{inv.invitedBy}</span>
+                            {' · '}
+                            {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '—'}
+                          </p>
+                        </div>
+                        {canCancel && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const ok = await cancelCoResearcherInvite(inv.id);
+                              if (!ok) {
+                                try {
+                                  window.dispatchEvent(new CustomEvent('biosample_flash', {
+                                    detail: { message: 'Could not cancel the invitation. Please try again.', variant: 'error' },
+                                  }));
+                                } catch {}
+                                return;
+                              }
+                              try {
+                                window.dispatchEvent(new CustomEvent('biosample_flash', {
+                                  detail: { message: `Invitation to ${inv.invitedTo} was cancelled.`, variant: 'success' },
+                                }));
+                              } catch {}
+                              addActivity(`${user?.fullName} cancelled co-researcher invite for ${inv.invitedTo} on project ${project.name}`);
+                            }}
+                            className="px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 text-gray-700 shrink-0"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                const req = row.request;
                 return (
-                  <div key={req.id} className="border border-gray-200 rounded-lg p-3">
+                  <div key={row.id} className="border border-gray-200 rounded-lg p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm">
                         <p className="font-medium text-gray-800">
@@ -775,8 +844,15 @@ export default function ProjectDetail() {
                     )}
                   </div>
                 );
-              })}
-            </div>
+                  })}
+                </div>
+                {canSeeOutgoingCoResearcherInvites && (
+                  <p className="text-xs text-gray-500">
+                    Invited researchers accept or decline on this project page or under Co-Researcher Invitations on Projects.
+                  </p>
+                )}
+              </div>
+            )
           )}
         </div>
       )}
@@ -869,9 +945,10 @@ export default function ProjectDetail() {
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Organism</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Sample Type</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Tissue Source</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Study Purpose</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Project name</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                <th className="text-center py-3 px-3 font-semibold text-gray-700 whitespace-nowrap min-w-[9.5rem] w-[1%] align-middle">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -882,10 +959,9 @@ export default function ProjectDetail() {
                   <td className="py-2 px-4">{r.organismName}</td>
                   <td className="py-2 px-4">{r.sampleType}</td>
                   <td className="py-2 px-4">{r.tissueSource ?? '—'}</td>
-                  <td className="py-2 px-4">{r.studyPurpose ?? '—'}</td>
-                  <td className="py-2 px-4">{r.projectName}</td>
-                  <td className="py-2 px-4">
-                    <div className="flex flex-wrap items-center gap-1.5">
+                  <td className="py-2 px-4 align-middle">{r.projectName}</td>
+                  <td className="py-2 px-3 whitespace-nowrap align-middle min-w-[9.5rem] w-[1%]">
+                    <div className="flex w-full min-w-0 flex-nowrap items-center justify-center gap-1.5">
                       <ViewIconLink to={`/samples/${r.id}`} label="View sample" />
                       {canEditSampleDirect(r) && (
                         <EditIconLink to={`/samples/${r.id}/edit`} label="Edit sample" />

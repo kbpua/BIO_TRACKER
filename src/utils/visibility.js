@@ -10,6 +10,14 @@ export function getProjectPublicationStatus(project) {
   return 'Draft';
 }
 
+/** Short label for publication chips in tables; hover uses full status via `title`. */
+export function formatPublicationStatusLabel(status) {
+  if (status === 'Published (public)') return 'Public';
+  if (status === 'Published (limited)') return 'Limited';
+  if (status === 'Draft') return 'Draft';
+  return status ?? '—';
+}
+
 export function isProjectPublished(project) {
   return getProjectPublicationStatus(project) !== 'Draft';
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ViewIconButton, DeleteIconButton } from '../components/TableActionButtons';
@@ -13,6 +13,14 @@ export default function UserManagement() {
   const [viewUserId, setViewUserId] = useState(null);
 
   const pending = users.filter((u) => u.status === 'Pending');
+  const pendingSorted = useMemo(
+    () =>
+      [...pending].sort(
+        (a, b) =>
+          new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime()
+      ),
+    [pending]
+  );
 
   const handleApprove = async (id) => {
     const target = users.find((u) => u.id === id);
@@ -77,11 +85,17 @@ export default function UserManagement() {
       </header>
 
       <div className="space-y-6">
-      {pending.length > 0 && (
+      {pendingSorted.length > 0 && (
         <div className="bg-amber-50/90 border border-amber-300 rounded-xl p-5 shadow-sm">
           <h2 className="font-bold text-amber-900 text-lg mb-4">Pending Approvals</h2>
-          <ul className="space-y-0 divide-y divide-amber-200/80">
-            {pending.map((u) => (
+          <ul
+            className={
+              pendingSorted.length > 3
+                ? 'space-y-0 divide-y divide-amber-200/80 max-h-[min(20rem,45vh)] overflow-y-auto overscroll-y-contain pr-1 -mr-0.5'
+                : 'space-y-0 divide-y divide-amber-200/80'
+            }
+          >
+            {pendingSorted.map((u) => (
               <li key={u.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                 <span className="text-blue-900 font-medium flex-1 min-w-0 truncate">
                   {u.fullName} ({u.email})

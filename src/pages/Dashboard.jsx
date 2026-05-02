@@ -20,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useTheme } from '../contexts/ThemeContext';
 import {
+  formatPublicationStatusLabel,
   getVisibleProjects,
   getVisibleSamples,
   getProjectPublicationStatus,
@@ -919,7 +920,9 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {myProjectsOverview.slice(0, 5).map((project) => (
+                {myProjectsOverview.slice(0, 5).map((project) => {
+                  const publicationLabel = getProjectPublicationStatus(project);
+                  return (
                   <tr
                     key={project.id}
                     className="border-b border-mint-50 hover:bg-mint-50/50"
@@ -939,20 +942,24 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="py-2.5 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        getProjectPublicationStatus(project) === 'Published (public)'
-                          ? 'bg-mint-100 text-mint-800'
-                          : getProjectPublicationStatus(project) === 'Published (limited)'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-orange-100 text-orange-800'
-                      }`}>
-                        {getProjectPublicationStatus(project)}
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
+                          publicationLabel === 'Published (public)'
+                            ? 'bg-mint-100 text-mint-800'
+                            : publicationLabel === 'Published (limited)'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-orange-100 text-orange-800'
+                        }`}
+                        title={publicationLabel}
+                      >
+                        {formatPublicationStatusLabel(publicationLabel)}
                       </span>
                     </td>
                     <td className="py-2.5 px-4">{project.sampleCount}</td>
                     <td className="py-2.5 px-4">{project.role === 'Lead' ? project.pendingCount : '-'}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             {myProjectsOverview.length > 5 && (

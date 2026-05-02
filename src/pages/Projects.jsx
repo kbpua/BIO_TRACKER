@@ -7,13 +7,40 @@ import { useData } from '../contexts/DataContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { PROJECT_STATUSES } from '../data/mockData';
 import { generateProjectId } from '../utils/projectId';
-import { PUBLICATION_STATUSES, canUserViewProject, getVisibleSamples, getProjectPublicationStatus } from '../utils/visibility';
+import {
+  PUBLICATION_STATUSES,
+  canUserViewProject,
+  formatPublicationStatusLabel,
+  getVisibleSamples,
+  getProjectPublicationStatus,
+} from '../utils/visibility';
 import { ViewIconLink, EditIconButton, DeleteIconButton } from '../components/TableActionButtons';
 import {
   displayNamesEqual,
   isPendingCoResearcherInviteForUser,
   PENDING_CO_RESEARCHER_INVITES_HASH,
 } from '../utils/personName';
+
+/** Short label for the projects table; hover shows the full comma-separated list. */
+function summarizeCoResearchers(names, maxVisible = 2) {
+  if (!Array.isArray(names) || names.length === 0) {
+    return { label: '—', title: undefined };
+  }
+  const filtered = names.map((n) => String(n).trim()).filter(Boolean);
+  if (filtered.length === 0) {
+    return { label: '—', title: undefined };
+  }
+  const fullList = filtered.join(', ');
+  if (filtered.length <= maxVisible) {
+    return { label: fullList, title: fullList };
+  }
+  const head = filtered.slice(0, maxVisible).join(', ');
+  const extra = filtered.length - maxVisible;
+  return {
+    label: `${head} +${extra} more`,
+    title: fullList,
+  };
+}
 
 function ProjectForm({
   project,
@@ -847,18 +874,26 @@ export default function Projects() {
             </tr>
           </thead>
           <tbody>
-            {filteredProjects.map((p) => (
+            {filteredProjects.map((p) => {
+              const publicationLabel = getProjectPublicationStatus(p);
+              const coResearchersCell = summarizeCoResearchers(p.coResearchers);
+              return (
               <tr key={p.id} className="border-b border-mint-50 hover:bg-mint-50/50">
-                <td className="py-2 px-4">{p.id}</td>
+                <td className="py-2 px-4 whitespace-nowrap font-mono text-[13px]">{p.id}</td>
                 <td className="py-2 px-4 font-medium">{p.name}</td>
                 <td className="py-2 px-4">{p.startDate || '—'}</td>
                 <td className="py-2 px-4">{p.endDate || '—'}</td>
                 <td className="py-2 px-4">{p.leadResearcher}</td>
-                <td className="py-2 px-4 max-w-xs truncate">
-                  {(Array.isArray(p.coResearchers) && p.coResearchers.length > 0) ? p.coResearchers.join(', ') : '—'}
+                <td className="py-2 px-4 align-top max-w-[18rem]">
+                  <span
+                    className="inline-block max-w-full truncate align-top text-sm text-gray-800"
+                    title={coResearchersCell.title}
+                  >
+                    {coResearchersCell.label}
+                  </span>
                 </td>
                 <td className="py-2 px-4">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-nowrap items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                       p.status === 'Active'
                         ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
@@ -868,14 +903,17 @@ export default function Projects() {
                     }`}>
                       {p.status}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      getProjectPublicationStatus(p) === 'Published (public)'
-                        ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
-                        : getProjectPublicationStatus(p) === 'Published (limited)'
-                          ? 'bg-blue-200 text-[#0b3f3b] dark:bg-blue-200 dark:text-[#0b3f3b]'
-                          : 'bg-orange-200 text-[#0b3f3b] dark:bg-orange-200 dark:text-[#0b3f3b]'
-                    }`}>
-                      {getProjectPublicationStatus(p)}
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
+                        publicationLabel === 'Published (public)'
+                          ? 'bg-mint-200 text-[#0b3f3b] dark:bg-mint-200 dark:text-[#0b3f3b]'
+                          : publicationLabel === 'Published (limited)'
+                            ? 'bg-blue-200 text-[#0b3f3b] dark:bg-blue-200 dark:text-[#0b3f3b]'
+                            : 'bg-orange-200 text-[#0b3f3b] dark:bg-orange-200 dark:text-[#0b3f3b]'
+                      }`}
+                      title={publicationLabel}
+                    >
+                      {formatPublicationStatusLabel(publicationLabel)}
                     </span>
                   </div>
                 </td>
@@ -900,7 +938,8 @@ export default function Projects() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         {filteredProjects.length === 0 && (
