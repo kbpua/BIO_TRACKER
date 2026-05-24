@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Allow active Researchers and Admins to read other active Researcher/Admin profiles
 -- (id, names, email) so the app can resolve co-researcher invite targets from a researcher session.
 -- Students are excluded by the caller-role guard. Complements profiles_select_own_or_admin (OR).

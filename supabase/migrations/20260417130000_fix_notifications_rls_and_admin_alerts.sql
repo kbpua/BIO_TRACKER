@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Fix: notifications RLS previously blocked ALL inserts (including RPCs), so admin
 -- alerts never appeared. Allow self-inserts for authenticated users; ensure RPC
 -- functions run as postgres (superuser) so cross-user inserts bypass RLS.

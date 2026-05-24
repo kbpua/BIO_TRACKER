@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+ *
+ * All rights reserved.
+ *
+ * This project was developed for academic purposes.
+ * The source code remains the intellectual property of the authors.
+ */
+
 // Test login accounts - ID format: [ROLE_CODE]-[NAME_INITIALS]-[INCREMENT]
 export const MOCK_USERS = [
   { id: 'ADM-DMS-001', email: 'admin@biosample.com', password: 'admin123', fullName: 'Dr. Maria Santos', role: 'Admin', status: 'Active', dateCreated: '2024-01-15', createdBy: 'System' },

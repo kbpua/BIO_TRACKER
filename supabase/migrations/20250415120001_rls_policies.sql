@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Row Level Security — starter policies for BioSample Tracker
 -- Tighten these per your course requirements (e.g. students: only published projects).
 -- Never expose the service_role key in the browser.

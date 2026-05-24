@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- BioSample Tracker — initial schema for Supabase (PostgreSQL)
 -- Run via Supabase SQL Editor, or: supabase db push (if using Supabase CLI)
 -- After migration: Authentication → Providers (enable Email); add Netlify URL to Auth URL config.

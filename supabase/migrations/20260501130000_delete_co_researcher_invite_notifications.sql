@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Allow cleanup of an invitee's pending INVITE notifications when their
 -- co-researcher invitation is cancelled by the lead researcher, or
 -- accepted/declined by the invitee themselves. Without this, the invitee's

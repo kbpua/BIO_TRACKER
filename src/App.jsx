@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+ *
+ * All rights reserved.
+ *
+ * This project was developed for academic purposes.
+ * The source code remains the intellectual property of the authors.
+ */
+
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';

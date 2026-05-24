@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+ *
+ * All rights reserved.
+ *
+ * This project was developed for academic purposes.
+ * The source code remains the intellectual property of the authors.
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Moon, Sun } from 'lucide-react';

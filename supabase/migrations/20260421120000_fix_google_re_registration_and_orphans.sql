@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Fix: stale profiles rows (no matching auth.users) after admin deletes a user
 -- could still match by email and block or confuse Google re-signup.
 -- handle_new_user: never auto-insert profiles for OAuth (non-email); Google

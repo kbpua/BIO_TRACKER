@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+ *
+ * All rights reserved.
+ *
+ * This project was developed for academic purposes.
+ * The source code remains the intellectual property of the authors.
+ */
+
 /**
  * True when this Supabase session was established with Google (or Google is linked).
  * Checks identities + iss: some redirects expose sparse app_metadata briefly.

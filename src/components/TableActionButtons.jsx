@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+ *
+ * All rights reserved.
+ *
+ * This project was developed for academic purposes.
+ * The source code remains the intellectual property of the authors.
+ */
+
 import { Link } from 'react-router-dom';
 import { Eye, SquarePen, FilePenLine, Trash2 } from 'lucide-react';
 

@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Google OAuth: defer profile row until in-app role selection; RPC for email/id
 -- resolution under RLS; allow authenticated self-insert; admin notification copy.
 

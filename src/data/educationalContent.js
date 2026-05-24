@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+ *
+ * All rights reserved.
+ *
+ * This project was developed for academic purposes.
+ * The source code remains the intellectual property of the authors.
+ */
+
 /**
  * Hardcoded educational blurbs for the Sample Detail Page.
  * Keys match mock data: organism id, sample type, disease, study purpose.

@@ -1,3 +1,10 @@
+-- Copyright (c) 2026 Jayme  |  Pua  |  Tinio  |  Valentin
+--
+-- All rights reserved.
+--
+-- This project was developed for academic purposes.
+-- The source code remains the intellectual property of the authors.
+
 -- Allow Admin users to delete an Auth account (auth.users) safely from the app.
 -- This function is SECURITY DEFINER and checks admin status internally.
 
